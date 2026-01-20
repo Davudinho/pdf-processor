@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Intelligenz System</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --secondary: #64748b;
+            --success: #22c55e;
+            --danger: #ef4444;
+            --bg: #f8fafc;
+            --text: #1e293b;
+            --border: #e2e8f0;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 0;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        header {
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        h1 {
+            color: var(--primary);
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .upload-section {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            margin-bottom: 2rem;
+            text-align: center;
+            border: 2px dashed var(--border);
+            transition: all 0.3s ease;
+        }
+
+        .upload-section:hover, .upload-section.dragover {
+            border-color: var(--primary);
+            background-color: #eff6ff;
+        }
+
+        .upload-btn {
+            background-color: var(--primary);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 1rem;
+            margin-top: 1rem;
+            transition: background 0.2s;
+        }
+
+        .upload-btn:hover {
+            background-color: #1d4ed8;
+        }
+
+        .upload-btn:disabled {
+            background-color: var(--secondary);
+            cursor: not-allowed;
+        }
+
+        .documents-list {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .document-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+        }
+
+        .doc-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .doc-title {
+            font-weight: 600;
+            font-size: 1.125rem;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .status-processing { background-color: #fef08a; color: #854d0e; }
+        .status-structured { background-color: #bbf7d0; color: #166534; }
+
+        .btn-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+            margin-left: 0.5rem;
+            border: 1px solid var(--border);
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .btn-danger {
+             color: var(--danger);
+             border-color: #fecaca;
+        }
+        
+        .btn-danger:hover {
+            background-color: #fef2f2;
+        }
+
+        .json-preview {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 1rem;
+            border-radius: 6px;
+            margin-top: 1rem;
+            overflow-x: auto;
+            font-family: monospace;
+            font-size: 0.875rem;
+            display: none;
+        }
+        
+        input[type="file"] {
+            display: none;
+        }
+        
+        label.file-label {
+            display: block;
+            cursor: pointer;
+            color: var(--secondary);
+        }
+
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 3px solid var(--primary);
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .alert {
+            padding: 1rem;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+            display: none;
+        }
+        
+        .alert-error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>PDF Intelligenz System</h1>
+        <p>Laden Sie PDFs hoch für AI-gestützte Extraktion und Strukturierung.</p>
+    </header>
+
+    <div class="alert alert-error" id="error-alert"></div>
+
+    <div class="upload-section" id="drop-zone">
+        <form id="upload-form">
+            <input type="file" id="file-input" name="file" accept=".pdf">
+            <label for="file-input" class="file-label">
+                <div style="font-size: 3rem; margin-bottom: 1rem;">📄</div>
+                <strong>Klicken zum Auswählen</strong> oder PDF hierher ziehen
+            </label>
+            <button type="submit" class="upload-btn" id="upload-btn">Analysieren</button>
+        </form>
+    </div>
+
+    <h2>Dokumente</h2>
+    <div class="documents-list" id="docs-list">
+        <!-- Documents will be inserted here -->
+    </div>
+</div>
+
+<script>
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const uploadForm = document.getElementById('upload-form');
+    const docsList = document.getElementById('docs-list');
+    const errorAlert = document.getElementById('error-alert');
+    const uploadBtn = document.getElementById('upload-btn');
+
+    // Drag & Drop
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+    });
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'), false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false);
+    });
+
+    dropZone.addEventListener('drop', handleDrop, false);
+
+    function handleDrop(e) {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        fileInput.files = files;
+    }
+
+    // Upload
+    uploadForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const file = fileInput.files[0];
+        if (!file) return;
+
+        uploadBtn.disabled = true;
+        uploadBtn.innerHTML = '<div class="loader"></div> Verarbeite...';
+        errorAlert.style.display = 'none';
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const response = await fetch('/upload', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                fileInput.value = ''; // Reset
+                loadDocuments();
+            } else {
+                showError(result.error);
+            }
+        } catch (error) {
+            showError("Netzwerkfehler oder Server nicht erreichbar.");
+        } finally {
+            uploadBtn.disabled = false;
+            uploadBtn.innerText = 'Analysieren';
+        }
+    });
+
+    function showError(msg) {
+        errorAlert.textContent = msg;
+        errorAlert.style.display = 'block';
+    }
+
+    // Load Documents
+    async function loadDocuments() {
+        try {
+            const response = await fetch('/documents');
+            const result = await response.json();
+            if (result.success) {
+                renderDocuments(result.data);
+            }
+        } catch (error) {
+            console.error('Error loading documents:', error);
+        }
+    }
+
+    function renderDocuments(docs) {
+        docsList.innerHTML = '';
+        if (docs.length === 0) {
+            docsList.innerHTML = '<p style="text-align:center; color: var(--secondary)">Keine Dokumente gefunden.</p>';
+            return;
+        }
+
+        docs.forEach(doc => {
+            const date = new Date(doc.created_at).toLocaleString('de-DE');
+            const statusClass = doc.status === 'structured' ? 'status-structured' : 'status-processing';
+            const statusText = doc.status === 'structured' ? 'Fertig' : 'In Bearbeitung';
+            
+            const card = document.createElement('div');
+            card.className = 'document-card';
+            card.innerHTML = `
+                <div class="doc-header">
+                    <div>
+                        <div class="doc-title">${doc.filename}</div>
+                        <small style="color: var(--secondary)">${doc.page_count} Seiten • ${date}</small>
+                    </div>
+                    <div>
+                        <span class="status-badge ${statusClass}">${statusText}</span>
+                        <button class="btn-sm" onclick="toggleDetails('${doc.doc_id}')">Details</button>
+                        <button class="btn-sm btn-danger" onclick="deleteDocument('${doc.doc_id}')">Löschen</button>
+                    </div>
+                </div>
+                <div id="json-${doc.doc_id}" class="json-preview">Loading...</div>
+            `;
+            docsList.appendChild(card);
+        });
+    }
+
+    async function toggleDetails(docId) {
+        const el = document.getElementById(`json-${docId}`);
+        if (el.style.display === 'block') {
+            el.style.display = 'none';
+        } else {
+            el.style.display = 'block';
+            if (el.innerText === 'Loading...') {
+                try {
+                    const response = await fetch(`/document/${docId}`);
+                    const result = await response.json();
+                    if (result.success) {
+                        el.innerText = JSON.stringify(result.data, null, 2);
+                    } else {
+                        el.innerText = 'Fehler beim Laden der Details.';
+                    }
+                } catch (e) {
+                    el.innerText = 'Fehler.';
+                }
+            }
+        }
+    }
+
+    async function deleteDocument(docId) {
+        if(!confirm("Wirklich löschen?")) return;
+        
+        try {
+            const response = await fetch(`/document/${docId}`, { method: 'DELETE' });
+            const result = await response.json();
+            if (result.success) {
+                loadDocuments();
+            } else {
+                alert("Löschen fehlgeschlagen: " + result.error);
+            }
+        } catch (e) {
+            alert("Fehler beim Löschen.");
+        }
+    }
+
+    // Initial load
+    loadDocuments();
+</script>
+</body>
+</html>
