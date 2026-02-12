@@ -1,5 +1,6 @@
 pymupdf
 pytesseract==0.3.10
+ocrmypdf>=15.0.0
 flask==3.0.0
 pymongo==4.6.0
 openai

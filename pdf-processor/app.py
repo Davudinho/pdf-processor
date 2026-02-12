@@ -12,7 +12,7 @@ if not hasattr(pkgutil, 'find_loader'):
 
 import threading
 import logging
-from flask import Flask, request, jsonify, render_template, abort
+from flask import Flask, request, jsonify, render_template, abort, send_file
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 
@@ -69,6 +69,15 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
+    """
+    Upload and process a PDF file.
+    
+    Steps:
+    1. Save uploaded file to disk
+    2. Extract text from all pages (with OCR if needed)
+    3. Store original PDF in GridFS + page data in MongoDB
+    4. Trigger async AI processing for summaries and structured data
+    """
     if 'file' not in request.files:
         return jsonify({"success": False, "error": "No file part"}), 400
     
@@ -83,23 +92,24 @@ def upload_file():
         try:
             file.save(filepath)
             
-            # 1. Process PDF (Extract Text) - This is fast enough to be synchronous for reasonably sized PDFs
-            logger.info(f"Processing PDF: {filename}")
+            # Step 1: Extract text from PDF (with OCR support)
+            logger.info(f"Extracting text from PDF: {filename}")
             pages_data = pdf_processor.extract_text_from_pdf(filepath)
             
             if not pages_data:
                  return jsonify({"success": False, "error": "Could not extract text from PDF"}), 400
 
-            # 2. Save extracted text to MongoDB
-            doc_id = db.save_pdf_pages(filename, pages_data)
+            # Step 2: Save PDF file + extracted text to MongoDB (with GridFS)
+            logger.info(f"Saving to database with GridFS...")
+            doc_id = db.save_pdf_with_pages(filepath, filename, pages_data)
             
             if not doc_id:
                 return jsonify({"success": False, "error": "Database save failed"}), 500
             
-            # 3. Trigger AI Structure (Asynchronous)
-            logger.info(f"Starting async AI structuring for {doc_id}")
+            # Step 3: Trigger AI processing (async)
+            logger.info(f"Starting async AI processing for {doc_id}")
             thread = threading.Thread(target=process_document_async, args=(doc_id,))
-            thread.daemon = True # Daemonize thread so it doesn't block app shutdown
+            thread.daemon = True
             thread.start()
             
             return jsonify({
@@ -108,7 +118,7 @@ def upload_file():
                     "doc_id": doc_id,
                     "filename": filename,
                     "page_count": len(pages_data),
-                    "message": "File uploaded. Processing in background."
+                    "message": "File uploaded successfully. AI processing in background."
                 }
             })
             
@@ -116,9 +126,8 @@ def upload_file():
             logger.error(f"Error processing upload: {e}")
             return jsonify({"success": False, "error": str(e)}), 500
         finally:
-            # Optional: Remove file after extracting text to save space
-            # if os.path.exists(filepath):
-            #    os.remove(filepath)
+            # Optional: Remove temporary file after processing
+            # Keeping it for now in case we need to reprocess
             pass
             
     return jsonify({"success": False, "error": "Invalid file type. Only PDF allowed."}), 400
@@ -160,6 +169,9 @@ def get_document_structured(doc_id):
 
 @app.route('/document/<doc_id>', methods=['DELETE'])
 def delete_document(doc_id):
+    """
+    Delete a document and all associated data (pages, PDF file, metadata).
+    """
     try:
         success = db.delete_document(doc_id)
         if success:
@@ -167,6 +179,73 @@ def delete_document(doc_id):
         else:
             return jsonify({"success": False, "error": "Document not found or could not be deleted"}), 404
     except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/search', methods=['GET'])
+def search_documents():
+    """
+    Search documents by keyword.
+    
+    Query params:
+    - q: Search query string (required)
+    - limit: Maximum number of results (optional, default: 20)
+    
+    Example: /search?q=invoice&limit=10
+    """
+    query = request.args.get('q', '').strip()
+    if not query:
+        return jsonify({"success": False, "error": "Query parameter 'q' is required"}), 400
+    
+    try:
+        limit = int(request.args.get('limit', 20))
+        limit = min(limit, 100)  # Cap at 100 results
+    except ValueError:
+        limit = 20
+    
+    try:
+        results = db.search_documents(query, limit=limit)
+        return jsonify({
+            "success": True,
+            "data": {
+                "query": query,
+                "count": len(results),
+                "results": results
+            }
+        })
+    except Exception as e:
+        logger.error(f"Error in search endpoint: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/document/<doc_id>/download', methods=['GET'])
+def download_pdf(doc_id):
+    """
+    Download the original PDF file for a document.
+    Returns 404 if document or PDF file doesn't exist.
+    """
+    try:
+        # Get document metadata
+        doc_details = db.get_document_details(doc_id)
+        if not doc_details:
+            return jsonify({"success": False, "error": "Document not found"}), 404
+        
+        pdf_file_id = doc_details.get("pdf_file_id")
+        if not pdf_file_id:
+            return jsonify({"success": False, "error": "Original PDF file not available"}), 404
+        
+        # Retrieve PDF from GridFS
+        pdf_file = db.get_pdf_file(pdf_file_id)
+        if not pdf_file:
+            return jsonify({"success": False, "error": "PDF file not found in storage"}), 404
+        
+        # Send file to user
+        return send_file(
+            pdf_file,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=doc_details.get("filename", "document.pdf")
+        )
+    except Exception as e:
+        logger.error(f"Error downloading PDF: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 if __name__ == '__main__':
