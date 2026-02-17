@@ -581,24 +581,111 @@
         }
 
         async function viewDocument(id, filename) {
+            // 1) Open modal immediately + show loading state
             modalTitle.textContent = filename;
-            modalBody.innerHTML = '<div style="text-align:center; padding:2rem;">Lade Daten...</div>';
+            modalBody.innerHTML = '<div style="text-align:center; padding:2rem;">Loading data...</div>';
             openModal();
 
             try {
+                // 2) Fetch data from backend
                 const res = await fetch(`/document/${id}/structured`);
                 const data = await res.json();
 
-                if (data.success) {
-                    // Formatting JSON nicely
-                    modalBody.innerHTML = `<pre>${JSON.stringify(data.data, null, 2)}</pre>`;
-                } else {
-                    modalBody.innerHTML = `<p style="color:var(--danger)">Fehler beim Laden: ${data.error}</p>`;
+                if (!data.success) {
+                    modalBody.innerHTML = `<p style="color:var(--danger)">Error loading data: ${data.error}</p>`;
+                    return;
                 }
+
+                // 3) New: Extract specific fields instead of JSON dump
+                const doc = data.data;
+
+                // Document summary (ideally comes from documents_collection)
+                const documentSummary = (doc.document_summary && doc.document_summary.trim().length > 0)
+                    ? doc.document_summary
+                    : "Noch keine Dokument-Zusammenfassung verfügbar (wahrscheinlich noch in Bearbeitung).";
+
+                // Document-level keywords (optional; only if sent from backend)
+                const documentKeywords = Array.isArray(doc.document_keywords) ? doc.document_keywords : [];
+
+                // Handle pages robustly
+                const pages = Array.isArray(doc.pages) ? doc.pages : [];
+
+                // 4) New: Build HTML (readable, instead of raw JSON)
+                let html = `<div style="font-family: Inter, sans-serif; color: var(--text-main);">`;
+
+                // A) Header: Document Summary
+                html += `
+                <section style="background:#eff6ff; border:1px solid #dbeafe; padding:1rem; border-radius:0.75rem;">
+                    <h3 style="margin:0 0 0.5rem 0; color: var(--primary);">Dokument-Zusammenfassung</h3>
+                    <p style="margin:0; color: var(--text-main); white-space: pre-wrap;">${escapeHtml(documentSummary)}</p>
+                </section>
+                `;
+
+                // B) Document Keywords (only if present)
+                if (documentKeywords.length > 0) {
+                    html += `<section style="margin-top:1.25rem;">
+                    <h3 style="margin:0 0 0.5rem 0;">Wichtige Begriffe</h3>
+                    <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">`;
+
+                    documentKeywords.slice(0, 30).forEach((kw) => {
+                        html += `<span style="background:#e2e8f0; color:#0f172a; padding:0.25rem 0.6rem; border-radius:9999px; font-size:0.85rem;">
+                        ${escapeHtml(String(kw))}
+                        </span>`;
+                    });
+
+                    html += `</div></section>`;
+                }
+
+                // C) Page Overview: page_summary per page
+                html += `<section style="margin-top:1.5rem;">
+                <h3 style="margin:0 0 0.75rem 0;">Seiten-Zusammenfassungen</h3>
+                `;
+
+                if (pages.length === 0) {
+                    html += `<p style="margin:0; color: var(--text-muted);">Keine Seiten gefunden.</p>`;
+                } else {
+                    pages.forEach((page) => {
+                        const pageNum = page.page_num ?? "?";
+                        const pageSummary = (page.page_summary && String(page.page_summary).trim().length > 0)
+                            ? page.page_summary
+                            : "Noch keine Seiten-Zusammenfassung verfügbar.";
+
+                        const pageKeywords = Array.isArray(page.keywords) ? page.keywords : [];
+
+                        html += `
+                        <div style="background:white; border:1px solid var(--border); border-radius:0.75rem; padding:1rem; margin-bottom:0.75rem;">
+                            <div style="display:flex; justify-content:space-between; gap:1rem; align-items:center; margin-bottom:0.5rem;">
+                            <div style="font-weight:600;">Page ${escapeHtml(String(pageNum))}</div>
+                            <div style="font-size:0.85rem; color: var(--text-muted);">Keywords: ${pageKeywords.length}</div>
+                            </div>
+
+                            <p style="margin:0 0 0.75rem 0; white-space: pre-wrap;">${escapeHtml(pageSummary)}</p>
+                        `;
+
+                        if (pageKeywords.length > 0) {
+                            html += `<div style="display:flex; flex-wrap:wrap; gap:0.35rem;">`;
+                            pageKeywords.slice(0, 10).forEach((kw) => {
+                                html += `<span style="background:#f1f5f9; border:1px solid var(--border); padding:0.2rem 0.5rem; border-radius:0.5rem; font-size:0.8rem;">
+                            ${escapeHtml(String(kw))}
+                            </span>`;
+                            });
+                            html += `</div>`;
+                        }
+
+                        html += `</div>`;
+                    });
+                }
+
+                html += `</section></div>`;
+
+                // 5) New: Insert finished HTML into modal instead of <pre> JSON
+                modalBody.innerHTML = html;
+
             } catch (e) {
                 modalBody.innerHTML = `<p style="color:var(--danger)">Netzwerkfehler.</p>`;
             }
         }
+
 
         function openModal() {
             modal.classList.add('open');
@@ -612,6 +699,19 @@
         modal.addEventListener('click', e => {
             if (e.target === modal) closeModal();
         });
+
+        /**
+         * New: Helper function to prevent Summaries/Keywords from being interpreted as HTML.
+         * (Security + prevents broken layout with special characters.)
+         */
+        function escapeHtml(text) {
+            return text
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#039;");
+        }
 
     </script>
 </body>

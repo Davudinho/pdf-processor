@@ -466,7 +466,9 @@ class MongoDBManager:
                 "all_measurements": [],
                 "all_key_fields": {},
                 "all_tables": [],
-                "pages": doc_details["pages"]
+                "pages": doc_details["pages"],
+                "document_summary": doc_details.get("document_summary", ""),
+                "document_keywords": doc_details.get("keywords", [])
             }
 
             for page in doc_details["pages"]:

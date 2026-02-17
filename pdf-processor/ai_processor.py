@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class AIProcessor:
-    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-3.5-turbo"):
+    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-5-mini"):
         """
         Initialize AI Processor.
         :param api_key: OpenAI API Key. If None, tries to read from env or os.
@@ -242,11 +242,28 @@ RULES:
             raw_text = page.get("raw_text", "")
             
             # Skip already processed pages (optional optimization)
-            if page.get("status") == "structured":
-                logger.info(f"[{idx}/{len(pages)}] Page {page_num} already processed, skipping...")
+            # CRITICAL CHANGE: Only skip if we actually HAVE a summary. 
+            # If status is "structured" but summary is empty, it means previous processing failed or was empty.
+            if page.get("status") == "structured" and page.get("page_summary"):
+                logger.info(f"[{idx}/{len(pages)}] Page {page_num} already processed with summary, skipping...")
+                
+                # Collect existing data for document-level aggregation
+                existing_summary = page.get("page_summary", "")
+                existing_keywords = page.get("keywords", [])
+                
+                if existing_summary:
+                    all_summaries.append(existing_summary)
+                if existing_keywords:
+                    all_keywords.extend(existing_keywords)
+                
+                processed_count += 1
                 continue
             
-            logger.info(f"[{idx}/{len(pages)}] Processing page {page_num}...")
+            # If we are here, we are (re)processing the page
+            if page.get("status") == "structured":
+                 logger.info(f"[{idx}/{len(pages)}] Retrying page {page_num} (was 'structured' but missing summary)...")
+            else:
+                 logger.info(f"[{idx}/{len(pages)}] Processing page {page_num}...")
             logger.info(f"  Text length: {len(raw_text)} characters")
             
             structured_data = self.structure_text(raw_text)
@@ -302,6 +319,52 @@ RULES:
             logger.warning(f"  Failed: {failed_count} pages")
         logger.info("="*70)
     
+    def generate_document_summary(self, page_summaries: List[str]) -> str:
+        """
+        Generate a concise executive summary for the entire document based on page summaries.
+        """
+        if not page_summaries:
+            return ""
+            
+        # If only one page, just return that page's summary
+        if len(page_summaries) == 1:
+            return page_summaries[0]
+
+        # Combine page summaries into a context
+        context = "\n\n".join([f"Page {i+1}: {summary}" for i, summary in enumerate(page_summaries)])
+        
+        # Truncate if too long (approx 12k chars to stay well within token limits for 4o-mini/3.5)
+        if len(context) > 12000:
+             context = context[:6000] + "\n\n[...intermediate pages omitted...]\n\n" + context[-6000:]
+
+        system_prompt = """
+        You are an expert executive assistant. 
+        Create a coherent, concise executive summary (100-200 words) of the ENTIRE document based on the provided page summaries.
+        
+        GUIDELINES:
+        1. Synthesize the information, do not just list what is on each page.
+        2. Identify the core purpose, main results, and key dates/entities.
+        3. Write in the same language as the document (German or English).
+        4. Focus on the "Big Picture".
+        """
+
+        try:
+            logger.info(f"Generating document summary from {len(page_summaries)} pages...")
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Here are the summaries of the document pages:\n\n{context}"}
+                ],
+                temperature=0.3,
+                max_tokens=500
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            logger.error(f"Failed to generate document summary: {e}")
+            # Fallback to simple concatenation
+            return f"Document with {len(page_summaries)} pages. " + page_summaries[0]
+
     def _update_document_metadata(self, db_manager: MongoDBManager, doc_id: str, 
                                    page_summaries: List[str], all_keywords: List[str]):
         """
@@ -313,19 +376,15 @@ RULES:
         :param all_keywords: List of all keywords from all pages
         """
         try:
-            # Create document summary from page summaries
-            if len(page_summaries) <= 3:
-                # For short documents, concatenate all summaries
-                doc_summary = " ".join(page_summaries)
-            else:
-                # For longer documents, create overview
-                doc_summary = f"This document contains {len(page_summaries)} pages. {page_summaries[0]}"
+            # Create document summary using AI
+            doc_summary = self.generate_document_summary(page_summaries)
             
             # Deduplicate and limit keywords
             unique_keywords = list(dict.fromkeys(all_keywords))[:30]  # Top 30 unique keywords
             
             # Update documents collection
-            if db_manager.documents_collection:
+            if db_manager.documents_collection is not None:
+                logger.info(f"Updating document {doc_id} with {len(unique_keywords)} keywords and summary length {len(doc_summary)}")
                 db_manager.documents_collection.update_one(
                     {"doc_id": doc_id},
                     {

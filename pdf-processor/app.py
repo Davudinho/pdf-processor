@@ -35,6 +35,7 @@ app.config['MAX_CONTENT_LENGTH'] = int(os.getenv('MAX_CONTENT_LENGTH', 50 * 1024
 app.config['MONGO_URI'] = os.getenv('MONGO_URI', 'mongodb://localhost:27017/')
 app.config['DB_NAME'] = os.getenv('DB_NAME', 'pdf_intelligence_db')
 app.config['OPENAI_API_KEY'] = os.getenv('OPENAI_API_KEY')
+app.config['OPENAI_MODEL'] = os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
 
 # Ensure API Key is present
 if not app.config['OPENAI_API_KEY']:
@@ -46,7 +47,7 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 # Initialize components
 db = MongoDBManager(uri=app.config['MONGO_URI'], db_name=app.config['DB_NAME'])
 pdf_processor = PDFProcessor()
-ai_processor = AIProcessor(api_key=app.config['OPENAI_API_KEY'])
+ai_processor = AIProcessor(api_key=app.config['OPENAI_API_KEY'], model=app.config['OPENAI_MODEL'])
 
 ALLOWED_EXTENSIONS = {'pdf'}
 
