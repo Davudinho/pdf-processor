@@ -546,20 +546,33 @@
             }
 
             docsList.innerHTML = docs.map(doc => {
-                const isCompleted = doc.status === 'structured'; // Matches backend "structured"
-                const statusLabel = isCompleted ? 'Fertig' : 'In Bearbeitung';
-                const badgeClass = isCompleted ? 'badge-completed' : 'badge-processing';
+                const isCompleted = doc.status === 'structured';
+                const isFailed = doc.status === 'failed';
+
+                let statusLabel = 'In Bearbeitung';
+                let badgeClass = 'badge-processing';
+
+                if (isCompleted) {
+                    statusLabel = 'Fertig';
+                    badgeClass = 'badge-completed';
+                } else if (isFailed) {
+                    statusLabel = 'Fehler';
+                    badgeClass = 'status-error'; // Reusing existing error class
+                }
+
                 const dateStr = new Date(doc.created_at).toLocaleString('de-DE');
+                const errorMsg = isFailed ? `title="${escapeHtml(doc.error_message || 'Unbekannter Fehler')}"` : '';
 
                 return `
-                <div class="doc-card">
+                <div class="doc-card" ${errorMsg}>
                     <div>
                         <div class="doc-title" title="${doc.filename}">${doc.filename}</div>
                         <div class="doc-meta">${doc.page_count} Seiten • ${dateStr}</div>
                         <span class="doc-status ${badgeClass}">${statusLabel}</span>
+                        ${isFailed ? `<div style="color:var(--danger); font-size:0.75rem; margin-top:0.25rem;">${escapeHtml(doc.error_message || '')}</div>` : ''}
                     </div>
                     <div class="doc-actions">
-                        <button class="btn btn-sm btn-outline" onclick="viewDocument('${doc.doc_id}', '${doc.filename}')">Ansehen</button>
+                        <button class="btn btn-sm btn-outline" onclick="viewDocument('${doc.doc_id}', '${doc.filename}')" ${isFailed ? 'disabled' : ''}>Ansehen</button>
                         <button class="btn btn-sm btn-danger" onclick="deleteDocument('${doc.doc_id}')">Löschen</button>
                     </div>
                 </div>
