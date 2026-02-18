@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Intelligenz System</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --secondary: #64748b;
+            --success: #16a34a;
+            --warning: #ca8a04;
+            --danger: #dc2626;
+            --bg: #f1f5f9;
+            --card-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #475569;
+            --border: #e2e8f0;
+            --radius: 0.75rem;
+            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1024px;
+            margin: 2rem auto;
+            padding: 0 1.5rem;
+        }
+
+        header {
+            margin-bottom: 3rem;
+            text-align: center;
+        }
+
+        h1 {
+            color: var(--primary);
+            font-size: 2.25rem;
+            font-weight: 700;
+            margin: 0 0 0.5rem 0;
+            letter-spacing: -0.025em;
+        }
+
+        p.subtitle {
+            color: var(--text-muted);
+            font-size: 1.125rem;
+            margin: 0;
+        }
+
+        /* Upload Section */
+        .upload-card {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 2.5rem;
+            text-align: center;
+            border: 2px dashed var(--border);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            margin-bottom: 2.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-card.drag-active {
+            border-color: var(--primary);
+            background-color: #eff6ff;
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 3.5rem;
+            margin-bottom: 1rem;
+            color: var(--secondary);
+            transition: color 0.3s;
+        }
+
+        .upload-card.drag-active .upload-icon {
+            color: var(--primary);
+        }
+
+        .file-label {
+            display: inline-block;
+            cursor: pointer;
+        }
+
+        .file-label strong {
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        .file-label:hover strong {
+            text-decoration: underline;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            border: none;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+
+        .btn:active {
+            transform: translateY(1px);
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            color: white;
+            margin-top: 1.5rem;
+            width: 100%;
+            max-width: 200px;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .btn-primary:disabled {
+            background-color: var(--secondary);
+            cursor: not-allowed;
+        }
+
+        .btn-sm {
+            padding: 0.4rem 0.8rem;
+            font-size: 0.875rem;
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+        }
+
+        .btn-outline:hover {
+            background: #f8fafc;
+            border-color: var(--secondary);
+            color: var(--text-main);
+        }
+
+        .btn-danger {
+            background: #fef2f2;
+            color: var(--danger);
+            border: 1px solid #fecaca;
+        }
+
+        .btn-danger:hover {
+            background: #fee2e2;
+            border-color: var(--danger);
+        }
+
+        /* Status & Feedback */
+        #status-box {
+            display: none;
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            font-weight: 500;
+        }
+
+        .status-success {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .status-error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .status-loading {
+            background: #eff6ff;
+            color: #1e40af;
+        }
+
+        /* Documents List */
+        .docs-section h2 {
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .doc-list {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        }
+
+        .doc-card {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: transform 0.2s;
+        }
+
+        .doc-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .doc-header {
+            margin-bottom: 1rem;
+        }
+
+        .doc-title {
+            font-weight: 600;
+            font-size: 1.1rem;
+            color: var(--text-main);
+            margin-bottom: 0.25rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .doc-meta {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        .doc-status {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-top: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .badge-processing {
+            background: #fef9c3;
+            color: #854d0e;
+        }
+
+        .badge-completed {
+            background: #dcfce7;
+            color: #15803d;
+        }
+
+        .doc-actions {
+            margin-top: 1.5rem;
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .doc-actions .btn {
+            flex: 1;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+
+        .modal-overlay.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal {
+            background: white;
+            width: 90%;
+            max-width: 900px;
+            max-height: 90vh;
+            border-radius: var(--radius);
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1);
+        }
+
+        .modal-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--text-muted);
+        }
+
+        .modal-content {
+            padding: 1.5rem;
+            overflow-y: auto;
+            flex: 1;
+            font-family: monospace;
+            background: #f8fafc;
+        }
+
+        .json-tree {
+            white-space: pre-wrap;
+            word-break: break-all;
+            color: #334155;
+        }
+
+        /* Spinner */
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 0.5rem;
+            display: none;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <header>
+            <h1>PDF Intelligenz System</h1>
+            <p class="subtitle">AI-gestützte Dokumentenanalyse und Datenextraktion</p>
+        </header>
+
+        <!-- Upload Area -->
+        <div class="upload-card" id="drop-zone">
+            <form id="upload-form">
+                <div class="upload-icon">📁</div>
+                <p style="margin-bottom: 1.5rem; color: var(--text-muted);">
+                    <label for="file-input" class="file-label">
+                        <strong>Datei auswählen</strong>
+                    </label>
+                    oder hierher ziehen
+                </p>
+                <input type="file" id="file-input" name="file" accept=".pdf">
+                <div id="file-name" style="margin-bottom: 1rem; font-weight: 500; display:none;"></div>
+
+                <button type="submit" class="btn btn-primary" id="upload-btn" disabled>
+                    <div class="spinner" id="upload-spinner"></div>
+                    <span id="upload-text">Hochladen</span>
+                </button>
+            </form>
+            <div id="status-box"></div>
+        </div>
+
+        <!-- Documents List -->
+        <div class="docs-section">
+            <h2>Meine Dokumente</h2>
+            <div id="docs-list" class="doc-list">
+                <!-- Items injected by JS -->
+                <p style="color: var(--text-muted); grid-column: 1/-1; text-align: center;">Lade Dokumente...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- View Modal -->
+    <div class="modal-overlay" id="view-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title" id="modal-title">Dokument Details</div>
+                <button class="close-btn" onclick="closeModal()">×</button>
+            </div>
+            <div class="modal-content">
+                <div id="modal-body" class="json-tree"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let isUploading = false;
+        const POLLING_INTERVAL = 5000;
+
+        // Elements
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const fileNameDisplay = document.getElementById('file-name');
+        const uploadBtn = document.getElementById('upload-btn');
+        const uploadForm = document.getElementById('upload-form');
+        const statusBox = document.getElementById('status-box');
+        const docsList = document.getElementById('docs-list');
+        const uploadSpinner = document.getElementById('upload-spinner');
+        const uploadText = document.getElementById('upload-text');
+        const modal = document.getElementById('view-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalBody = document.getElementById('modal-body');
+
+        // Init
+        loadDocuments();
+        setInterval(loadDocuments, POLLING_INTERVAL);
+
+        // File Selection
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length > 0) {
+                updateFileState(fileInput.files[0]);
+            }
+        });
+
+        // Drag & Drop
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, e => {
+                e.preventDefault();
+                e.stopPropagation();
+            }, false);
+        });
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => dropZone.classList.add('drag-active'), false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => dropZone.classList.remove('drag-active'), false);
+        });
+
+        dropZone.addEventListener('drop', e => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            if (files.length > 0 && files[0].type === 'application/pdf') {
+                fileInput.files = files;
+                updateFileState(files[0]);
+            } else {
+                showStatus("Bitte nur PDF-Dateien hochladen.", "error");
+            }
+        });
+
+        function updateFileState(file) {
+            fileNameDisplay.textContent = `Ausgewählt: ${file.name}`;
+            fileNameDisplay.style.display = 'block';
+            uploadBtn.disabled = false;
+            hideStatus();
+        }
+
+        // Upload Handler
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (isUploading) return;
+
+            setUploading(true);
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            try {
+                const res = await fetch('/upload', { method: 'POST', body: formData });
+                const data = await res.json();
+
+                if (data.success) {
+                    showStatus("Upload erfolgreich! Verarbeitung gestartet.", "success");
+                    fileInput.value = '';
+                    fileNameDisplay.style.display = 'none';
+                    uploadBtn.disabled = true;
+                    loadDocuments(); // Immediate refresh
+                } else {
+                    showStatus(data.error || "Ein Fehler ist aufgetreten.", "error");
+                }
+            } catch (err) {
+                showStatus("Netzwerkfehler.", "error");
+            } finally {
+                setUploading(false);
+            }
+        });
+
+        function setUploading(active) {
+            isUploading = active;
+            uploadBtn.disabled = active;
+            uploadSpinner.style.display = active ? 'block' : 'none';
+            uploadText.textContent = active ? 'Wird hochgeladen...' : 'Hochladen';
+        }
+
+        function showStatus(msg, type) {
+            statusBox.textContent = msg;
+            statusBox.className = ''; // reset
+            statusBox.classList.add(type === 'error' ? 'status-error' : 'status-success');
+            statusBox.style.display = 'block';
+        }
+
+        function hideStatus() {
+            statusBox.style.display = 'none';
+        }
+
+        // Documents List
+        async function loadDocuments() {
+            try {
+                const res = await fetch('/documents');
+                const json = await res.json();
+                if (json.success) {
+                    renderDocuments(json.data);
+                }
+            } catch (e) {
+                console.error("Auto-refresh failed", e);
+            }
+        }
+
+        function renderDocuments(docs) {
+            if (!docs.length) {
+                docsList.innerHTML = '<p style="color: var(--text-muted); grid-column: 1/-1; text-align: center;">Keine Dokumente gefunden.</p>';
+                return;
+            }
+
+            docsList.innerHTML = docs.map(doc => {
+                const isCompleted = doc.status === 'structured'; // Matches backend "structured"
+                const statusLabel = isCompleted ? 'Fertig' : 'In Bearbeitung';
+                const badgeClass = isCompleted ? 'badge-completed' : 'badge-processing';
+                const dateStr = new Date(doc.created_at).toLocaleString('de-DE');
+
+                return `
+                <div class="doc-card">
+                    <div>
+                        <div class="doc-title" title="${doc.filename}">${doc.filename}</div>
+                        <div class="doc-meta">${doc.page_count} Seiten • ${dateStr}</div>
+                        <span class="doc-status ${badgeClass}">${statusLabel}</span>
+                    </div>
+                    <div class="doc-actions">
+                        <button class="btn btn-sm btn-outline" onclick="viewDocument('${doc.doc_id}', '${doc.filename}')">Ansehen</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteDocument('${doc.doc_id}')">Löschen</button>
+                    </div>
+                </div>
+            `;
+            }).join('');
+        }
+
+        // Actions
+        async function deleteDocument(id) {
+            if (!confirm("Möchten Sie dieses Dokument wirklich löschen?")) return;
+            try {
+                const res = await fetch(`/document/${id}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.success) loadDocuments();
+                else alert(data.error);
+            } catch (e) {
+                alert("Fehler beim Löschen.");
+            }
+        }
+
+        async function viewDocument(id, filename) {
+            // 1) Open modal immediately + show loading state
+            modalTitle.textContent = filename;
+            modalBody.innerHTML = '<div style="text-align:center; padding:2rem;">Loading data...</div>';
+            openModal();
+
+            try {
+                // 2) Fetch data from backend
+                const res = await fetch(`/document/${id}/structured`);
+                const data = await res.json();
+
+                if (!data.success) {
+                    modalBody.innerHTML = `<p style="color:var(--danger)">Error loading data: ${data.error}</p>`;
+                    return;
+                }
+
+                // 3) New: Extract specific fields instead of JSON dump
+                const doc = data.data;
+
+                // Document summary (ideally comes from documents_collection)
+                const documentSummary = (doc.document_summary && doc.document_summary.trim().length > 0)
+                    ? doc.document_summary
+                    : "Noch keine Dokument-Zusammenfassung verfügbar (wahrscheinlich noch in Bearbeitung).";
+
+                // Document-level keywords (optional; only if sent from backend)
+                const documentKeywords = Array.isArray(doc.document_keywords) ? doc.document_keywords : [];
+
+                // Handle pages robustly
+                const pages = Array.isArray(doc.pages) ? doc.pages : [];
+
+                // 4) New: Build HTML (readable, instead of raw JSON)
+                let html = `<div style="font-family: Inter, sans-serif; color: var(--text-main);">`;
+
+                // A) Header: Document Summary
+                html += `
+                <section style="background:#eff6ff; border:1px solid #dbeafe; padding:1rem; border-radius:0.75rem;">
+                    <h3 style="margin:0 0 0.5rem 0; color: var(--primary);">Dokument-Zusammenfassung</h3>
+                    <p style="margin:0; color: var(--text-main); white-space: pre-wrap;">${escapeHtml(documentSummary)}</p>
+                </section>
+                `;
+
+                // B) Document Keywords (only if present)
+                if (documentKeywords.length > 0) {
+                    html += `<section style="margin-top:1.25rem;">
+                    <h3 style="margin:0 0 0.5rem 0;">Wichtige Begriffe</h3>
+                    <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">`;
+
+                    documentKeywords.slice(0, 30).forEach((kw) => {
+                        html += `<span style="background:#e2e8f0; color:#0f172a; padding:0.25rem 0.6rem; border-radius:9999px; font-size:0.85rem;">
+                        ${escapeHtml(String(kw))}
+                        </span>`;
+                    });
+
+                    html += `</div></section>`;
+                }
+
+                // C) Page Overview: page_summary per page
+                html += `<section style="margin-top:1.5rem;">
+                <h3 style="margin:0 0 0.75rem 0;">Seiten-Zusammenfassungen</h3>
+                `;
+
+                if (pages.length === 0) {
+                    html += `<p style="margin:0; color: var(--text-muted);">Keine Seiten gefunden.</p>`;
+                } else {
+                    pages.forEach((page) => {
+                        const pageNum = page.page_num ?? "?";
+                        const pageSummary = (page.page_summary && String(page.page_summary).trim().length > 0)
+                            ? page.page_summary
+                            : "Noch keine Seiten-Zusammenfassung verfügbar.";
+
+                        const pageKeywords = Array.isArray(page.keywords) ? page.keywords : [];
+
+                        html += `
+                        <div style="background:white; border:1px solid var(--border); border-radius:0.75rem; padding:1rem; margin-bottom:0.75rem;">
+                            <div style="display:flex; justify-content:space-between; gap:1rem; align-items:center; margin-bottom:0.5rem;">
+                            <div style="font-weight:600;">Page ${escapeHtml(String(pageNum))}</div>
+                            <div style="font-size:0.85rem; color: var(--text-muted);">Keywords: ${pageKeywords.length}</div>
+                            </div>
+
+                            <p style="margin:0 0 0.75rem 0; white-space: pre-wrap;">${escapeHtml(pageSummary)}</p>
+                        `;
+
+                        if (pageKeywords.length > 0) {
+                            html += `<div style="display:flex; flex-wrap:wrap; gap:0.35rem;">`;
+                            pageKeywords.slice(0, 10).forEach((kw) => {
+                                html += `<span style="background:#f1f5f9; border:1px solid var(--border); padding:0.2rem 0.5rem; border-radius:0.5rem; font-size:0.8rem;">
+                            ${escapeHtml(String(kw))}
+                            </span>`;
+                            });
+                            html += `</div>`;
+                        }
+
+                        html += `</div>`;
+                    });
+                }
+
+                html += `</section></div>`;
+
+                // 5) New: Insert finished HTML into modal instead of <pre> JSON
+                modalBody.innerHTML = html;
+
+            } catch (e) {
+                modalBody.innerHTML = `<p style="color:var(--danger)">Netzwerkfehler.</p>`;
+            }
+        }
+
+
+        function openModal() {
+            modal.classList.add('open');
+        }
+
+        function closeModal() {
+            modal.classList.remove('open');
+        }
+
+        // Close modal on outside click
+        modal.addEventListener('click', e => {
+            if (e.target === modal) closeModal();
+        });
+
+        /**
+         * New: Helper function to prevent Summaries/Keywords from being interpreted as HTML.
+         * (Security + prevents broken layout with special characters.)
+         */
+        function escapeHtml(text) {
+            return text
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#039;");
+        }
+
+    </script>
+</body>
+
+</html>
