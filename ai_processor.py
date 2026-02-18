@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class AIProcessor:
-    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-5-mini"):
+    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4o-mini"):
         """
         Initialize AI Processor.
         :param api_key: OpenAI API Key. If None, tries to read from env or os.
@@ -84,10 +84,20 @@ class AIProcessor:
         text_to_process = raw_text
         if len(raw_text) > max_chars:
             logger.info(f"Text too long ({len(raw_text)} chars), truncating to {max_chars}")
-            # Take first 70% and last 30% to preserve context
-            first_part = raw_text[:int(max_chars * 0.7)]
-            last_part = raw_text[-int(max_chars * 0.3):]
-            text_to_process = first_part + "\n\n[...middle content truncated...]\n\n" + last_part
+            # Better truncation: Split by spaces to avoid cutting words
+            mid_point = int(max_chars * 0.7)
+            end_point = len(raw_text) - int(max_chars * 0.3)
+            
+            # Find nearest space to avoid cutting words
+            safe_mid = raw_text.rfind(' ', 0, mid_point)
+            safe_end = raw_text.find(' ', end_point)
+            
+            if safe_mid == -1: safe_mid = mid_point
+            if safe_end == -1: safe_end = end_point
+            
+            first_part = raw_text[:safe_mid]
+            last_part = raw_text[safe_end:]
+            text_to_process = f"{first_part}\n\n[...{len(raw_text) - len(first_part) - len(last_part)} chars truncated...]\n\n{last_part}"
 
         system_prompt = """
 You are a highly capable document extraction assistant. 
