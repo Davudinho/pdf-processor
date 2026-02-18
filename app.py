@@ -37,9 +37,14 @@ app.config['DB_NAME'] = os.getenv('DB_NAME', 'pdf_intelligence_db')
 app.config['OPENAI_API_KEY'] = os.getenv('OPENAI_API_KEY')
 app.config['OPENAI_MODEL'] = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
 
-# Ensure API Key is present
-if not app.config['OPENAI_API_KEY']:
-    logger.warning("WARNING: OPENAI_API_KEY is not set. AI processing will fail.")
+# Patch 1: Validate Critical Configuration
+api_key = app.config['OPENAI_API_KEY']
+if not api_key:
+    logger.error("CRITICAL: OPENAI_API_KEY is missing. AI features will not work.")
+elif not api_key.startswith("sk-"):
+    logger.warning(f"WARNING: API Key starts with '{api_key[:3]}...', expected 'sk-'. Check .env.")
+
+logger.info(f"AI Config: Model={app.config.get('OPENAI_MODEL', 'unknown')} | Key=...{str(api_key)[-4:] if api_key else 'None'}")
 
 # Ensure upload directory exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
