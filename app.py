@@ -68,6 +68,15 @@ def process_document_async(doc_id):
             ai_processor.process_document(db, doc_id)
     except Exception as e:
         logger.error(f"Error in background processing for {doc_id}: {e}")
+        # Update status to failed so UI stops loading
+        try:
+            with app.app_context():
+                db.documents_collection.update_one(
+                    {"doc_id": doc_id},
+                    {"$set": {"status": "failed", "error_message": str(e)}}
+                )
+        except Exception as db_e:
+            logger.error(f"Failed to update error status for {doc_id}: {db_e}")
 
 @app.route('/')
 def index():
