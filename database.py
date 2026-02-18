@@ -71,7 +71,7 @@ class MongoDBManager:
             
         except ConnectionFailure as e:
             logger.error(f"Could not connect to MongoDB: {e}")
-            pass 
+            raise  # Fail fast! App should not start without DB. 
         except Exception as e:
              # Handle IndexKeySpecsConflict by attempting to drop and recreate
              if "IndexKeySpecsConflict" in str(e) or (hasattr(e, 'code') and e.code == 86):
@@ -96,6 +96,7 @@ class MongoDBManager:
                      logger.error(f"Failed to fix indexes: {re}")
              else:
                 logger.error(f"Unexpected error connecting to MongoDB: {e}")
+                raise # Re-raise unexpected connection errors
 
     def save_pdf_with_pages(self, pdf_path: str, filename: str, pages_data: List[Dict[str, Any]]) -> Optional[str]:
         """
