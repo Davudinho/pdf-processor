@@ -9,7 +9,7 @@ load_dotenv()
 def test_api_key():
     api_key = os.getenv("OPENAI_API_KEY")
     # CRITICAL: Check for configured model
-    model = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo") # Default fallback
+    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini") # Default fallback
     
     print("-" * 50)
     print(f"Testing OpenAI API Key with Model: {model}...")
