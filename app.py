@@ -19,6 +19,8 @@ from dotenv import load_dotenv
 from pdf_processor import PDFProcessor
 from database import MongoDBManager
 from ai_processor import AIProcessor
+from text_chunker import TextChunker
+from qdrant_manager import QdrantManager
 
 # Load environment variables
 load_dotenv()
@@ -53,22 +55,40 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 db = MongoDBManager(uri=app.config['MONGO_URI'], db_name=app.config['DB_NAME'])
 pdf_processor = PDFProcessor()
 ai_processor = AIProcessor(api_key=app.config['OPENAI_API_KEY'], model=app.config['OPENAI_MODEL'])
+text_chunker = TextChunker()  # Einmalig initialisiert, nicht bei jedem Request
+qdrant_manager = QdrantManager()  # Verbindet zu localhost:6333 (Docker)
+if not qdrant_manager.is_connected():
+    logger.warning("Qdrant nicht erreichbar. RAG-Features deaktiviert. Starte Docker: docker compose up -d")
 
 ALLOWED_EXTENSIONS = {'pdf'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def process_document_async(doc_id):
-    """Background task to process document with AI."""
+def process_document_async(doc_id, pages_data):
+    """Background task: AI processing + Chunking + Qdrant Embedding."""
     logger.info(f"Background thread started for doc_id: {doc_id}")
     try:
-        # Use app context in case we need access to app config or similar in future
         with app.app_context():
+            # Step A: AI Strukturierung (Zusammenfassung, Keywords pro Seite)
             ai_processor.process_document(db, doc_id)
+
+            # Step B: Chunks erstellen und in Qdrant speichern
+            chunks = text_chunker.chunk_document(pages_data, doc_id, chunk_size=500, overlap=50)
+            logger.info(f"Chunks erstellt: {len(chunks)} aus {len(pages_data)} Seiten")
+
+            if qdrant_manager.is_connected() and chunks:
+                chunk_texts = [c["text"] for c in chunks]
+                embeddings = ai_processor.create_embeddings_batch(chunk_texts)
+                if embeddings:
+                    qdrant_manager.store_chunks(chunks, embeddings)
+                else:
+                    logger.warning("Embeddings fehlgeschlagen — Qdrant-Speicherung übersprungen.")
+            else:
+                logger.warning("Qdrant nicht verfügbar – Chunks werden nicht gespeichert.")
+
     except Exception as e:
         logger.error(f"Error in background processing for {doc_id}: {e}")
-        # Update status to failed so UI stops loading
         try:
             with app.app_context():
                 db.documents_collection.update_one(
@@ -121,9 +141,9 @@ def upload_file():
             if not doc_id:
                 return jsonify({"success": False, "error": "Database save failed"}), 500
             
-            # Step 3: Trigger AI processing (async)
-            logger.info(f"Starting async AI processing for {doc_id}")
-            thread = threading.Thread(target=process_document_async, args=(doc_id,))
+            # Step 3: Starte Background-Thread (AI + Chunking + Qdrant)
+            logger.info(f"Starting async processing for {doc_id}")
+            thread = threading.Thread(target=process_document_async, args=(doc_id, pages_data))
             thread.daemon = True
             thread.start()
             
@@ -185,11 +205,14 @@ def get_document_structured(doc_id):
 @app.route('/document/<doc_id>', methods=['DELETE'])
 def delete_document(doc_id):
     """
-    Delete a document and all associated data (pages, PDF file, metadata).
+    Delete a document and all associated data (pages, PDF file, metadata, Qdrant chunks).
     """
     try:
         success = db.delete_document(doc_id)
         if success:
+            # Auch Qdrant-Chunks löschen (sonst verwaiste Vektoren)
+            if qdrant_manager.is_connected():
+                qdrant_manager.delete_document(doc_id)
             return jsonify({"success": True, "data": {"doc_id": doc_id}})
         else:
             return jsonify({"success": False, "error": "Document not found or could not be deleted"}), 404

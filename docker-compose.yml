@@ -1,0 +1,13 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    ports:
+      - "6333:6333"   # REST API (wird von qdrant_manager.py genutzt)
+      - "6334:6334"   # gRPC (optional)
+    volumes:
+      - qdrant_data:/qdrant/storage   # Persistente Speicherung der Vektoren
+    restart: unless-stopped
+
+volumes:
+  qdrant_data:

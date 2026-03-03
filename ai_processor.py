@@ -410,6 +410,104 @@ RULES:
         except Exception as e:
             logger.error(f"Error updating document metadata: {e}")
 
+    def create_embedding(self, text: str) -> List[float]:
+        """
+        Erstellt einen Embedding-Vektor für einen Text.
+
+        Was passiert hier?
+        - Der Text wird an OpenAI gesendet
+        - OpenAI gibt eine Liste von 1536 Zahlen zurück
+        - Diese Zahlen repräsentieren die "Bedeutung" des Textes im Vektorraum
+        - Ähnliche Texte → ähnliche Vektoren → semantische Suche wird möglich
+
+        Modell: text-embedding-3-small (1536 Dimensionen, kosteneffizient)
+
+        :param text: Text für den Embedding erstellt werden soll
+        :return: Liste von 1536 Floats (der Vektor) oder leere Liste bei Fehler
+        """
+        if not self.client:
+            logger.error("create_embedding: OpenAI Client nicht initialisiert.")
+            return []
+
+        if not text or not text.strip():
+            logger.warning("create_embedding: Leerer Text übergeben.")
+            return []
+
+        try:
+            # Text kürzen falls zu lang (max ~8000 Tokens ~ 32000 Zeichen)
+            text_to_embed = text[:32000] if len(text) > 32000 else text
+
+            response = self.client.embeddings.create(
+                model="text-embedding-3-small",
+                input=text_to_embed
+            )
+            embedding = response.data[0].embedding
+            logger.info(f"Embedding erstellt: {len(embedding)} Dimensionen für {len(text)} Zeichen Text")
+            return embedding
+
+        except openai.AuthenticationError:
+            logger.error("create_embedding: Ungültiger API-Key.")
+            return []
+        except openai.RateLimitError:
+            logger.error("create_embedding: Rate Limit erreicht.")
+            return []
+        except Exception as e:
+            logger.error(f"create_embedding: Unerwarteter Fehler: {e}")
+            return []
+
+    def create_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
+        """
+        Erstellt Embeddings für mehrere Texte auf einmal.
+
+        Effizienter als create_embedding() einzeln aufzurufen, weil
+        OpenAI alle Texte in einem einzigen API-Call verarbeitet.
+
+        Beispiel:
+            texts = ["Chunk 1 Text", "Chunk 2 Text", "Chunk 3 Text"]
+            embeddings = ai.create_embeddings_batch(texts)
+            # embeddings[0] = Vektor für "Chunk 1 Text"
+            # embeddings[1] = Vektor für "Chunk 2 Text"
+            # embeddings[2] = Vektor für "Chunk 3 Text"
+
+        :param texts: Liste von Texten
+        :return: Liste von Vektoren (leere Liste bei Fehler)
+        """
+        if not self.client:
+            logger.error("create_embeddings_batch: OpenAI Client nicht initialisiert.")
+            return []
+
+        if not texts:
+            return []
+
+        # Leere Texte filtern, aber Position merken für spätere Zuordnung
+        valid_texts = [t[:32000] if len(t) > 32000 else t for t in texts if t and t.strip()]
+
+        if not valid_texts:
+            return []
+
+        try:
+            logger.info(f"Erstelle Batch-Embeddings für {len(valid_texts)} Texte...")
+            response = self.client.embeddings.create(
+                model="text-embedding-3-small",
+                input=valid_texts
+            )
+            # OpenAI gibt die Embeddings in der gleichen Reihenfolge zurück
+            embeddings = [item.embedding for item in response.data]
+            logger.info(f"Batch-Embeddings fertig: {len(embeddings)} Vektoren à {len(embeddings[0])} Dimensionen")
+            return embeddings
+
+        except openai.RateLimitError:
+            logger.warning("Rate Limit bei Batch-Embeddings. Versuche einzeln...")
+            # Fallback: einzeln verarbeiten
+            results = []
+            for text in valid_texts:
+                emb = self.create_embedding(text)
+                results.append(emb)
+            return results
+        except Exception as e:
+            logger.error(f"create_embeddings_batch: Fehler: {e}")
+            return []
+
 if __name__ == "__main__":
     # Test script
     import sys
