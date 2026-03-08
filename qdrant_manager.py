@@ -197,23 +197,22 @@ class QdrantManager:
                 )
 
             # Similarity Search ausführen
-            results = self.client.search(
+            results = self.client.query_points(
                 collection_name=COLLECTION_NAME,
-                query_vector=query_embedding,
-                limit=limit,
+                query=query_embedding,
                 query_filter=search_filter,
-                with_payload=True    # Metadaten (Text, Seite, ...) mitliefern
+                limit=limit
             )
-
+            
             # Ergebnisse in ein lesbares Format umwandeln
             hits = []
-            for result in results:
+            for point in results.points:
                 hits.append({
-                    "score": round(result.score, 4),    # Ähnlichkeitswert: 1.0 = identisch
-                    "text": result.payload.get("text", ""),
-                    "doc_id": result.payload.get("doc_id", ""),
-                    "page_num": result.payload.get("page_num", 0),
-                    "chunk_index": result.payload.get("chunk_index", 0),
+                    "score": round(point.score, 4),    # Ähnlichkeitswert: 1.0 = identisch
+                    "text": point.payload.get("text", ""),
+                    "doc_id": point.payload.get("doc_id", ""),
+                    "page_num": point.payload.get("page_num", 0),
+                    "chunk_index": point.payload.get("chunk_index", 0),
                 })
 
             logger.info(f"search_similar: {len(hits)} Treffer gefunden (doc_id={doc_id or 'alle'})")
