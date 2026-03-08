@@ -286,6 +286,80 @@ def download_pdf(doc_id):
         logger.error(f"Error downloading PDF: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
+@app.route('/ask', methods=['POST'])
+def ask_question():
+    """
+    RAG-Endpunkt: Beantwortet Fragen zu einem Dokument oder der gesamten Datenbank.
+    
+    Erwartet JSON:
+    {
+        "doc_id": "optional_document_id_to_filter",
+        "question": "Was ist der Gesamtbetrag der Rechnung?"
+    }
+    """
+    data = request.json
+    if not data or 'question' not in data:
+        return jsonify({"success": False, "error": "Missing 'question' in request body"}), 400
+        
+    question = data['question'].strip()
+    if not question:
+        return jsonify({"success": False, "error": "Empty question"}), 400
+        
+    doc_id = data.get('doc_id') # Optional: Wenn leer, wird über alle Dokumente gesucht
+    
+    if not qdrant_manager.is_connected():
+        return jsonify({"success": False, "error": "Vektor-Datenbank (Qdrant) ist nicht erreichbar. RAG deaktiviert."}), 503
+        
+    try:
+        # Step 1: Embedding für die Frage erstellen
+        logger.info(f"RAG: Frage '{question}' (doc_id={doc_id})")
+        query_embedding = ai_processor.create_embedding(question)
+        
+        if not query_embedding:
+            return jsonify({"success": False, "error": "Konnte Frage nicht analysieren (Embedding fehlgeschlagen)."}), 500
+            
+        # Step 2: Ähnliche Chunks aus Qdrant suchen
+        # Wir holen die Top 5 relevantesten Textabschnitte
+        hits = qdrant_manager.search_similar(query_embedding, limit=5, doc_id=doc_id)
+        
+        if not hits:
+            return jsonify({
+                "success": True, 
+                "data": {
+                    "question": question,
+                    "answer": "Ich konnte keine passenden Textstellen im Dokument finden.",
+                    "sources": []
+                }
+            })
+            
+        # Step 3: Text aus den Chunks extrahieren
+        context_chunks = [hit["text"] for hit in hits]
+        
+        # Step 4: LLM mit Kontext + Frage aufrufen
+        answer = ai_processor.ask_question(question, context_chunks)
+        
+        # Step 5: Quellen aufbereiten für UI
+        sources = []
+        for hit in hits:
+            sources.append({
+                "page_num": hit.get("page_num"),
+                "score": hit.get("score"),
+                "preview": hit.get("text")[:100] + "..." if len(hit.get("text", "")) > 100 else hit.get("text"),
+            })
+            
+        return jsonify({
+            "success": True,
+            "data": {
+                "question": question,
+                "answer": answer,
+                "sources": sources
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in /ask endpoint: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 if __name__ == '__main__':
     # Validate API Key on startup
     if not os.getenv("OPENAI_API_KEY"):

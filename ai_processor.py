@@ -508,6 +508,57 @@ RULES:
             logger.error(f"create_embeddings_batch: Fehler: {e}")
             return []
 
+    def ask_question(self, question: str, context_chunks: List[str]) -> str:
+        """
+        Beantwortet eine Frage basierend auf den übergebenen Text-Chunks (RAG).
+        
+        :param question: Die Frage des Benutzers
+        :param context_chunks: Liste der relevanten Textabschnitte aus Qdrant
+        :return: Die Antwort des KI-Modells
+        """
+        if not self.client:
+            logger.error("ask_question: OpenAI Client nicht initialisiert.")
+            return "Fehler: KI-Service ist nicht verfügbar."
+            
+        if not context_chunks:
+            return "Ich konnte keine passenden Informationen im Dokument finden, um diese Frage zu beantworten."
+            
+        # Kontext zusammenbauen
+        context_text = "\n\n---\n\n".join(context_chunks)
+        
+        system_prompt = """Du bist ein hilfreicher KI-Assistent für die Analyse von Dokumenten.
+Deine Aufgabe ist es, die Frage des Benutzers AUSSCHLIESSLICH basierend auf dem bereitgestellten Kontext zu beantworten.
+
+REGELN:
+1. Nutze NUR die Informationen aus dem Kontext. 
+2. Wenn die Antwort nicht im Kontext enthalten ist, sage ehrlich: "Das weiß ich basierend auf dem Dokument nicht."
+3. Erfinde niemals Fakten (keine Halluzinationen).
+4. Antworte in der Sprache, in der die Frage gestellt wurde (meistens Deutsch).
+5. Halte deine Antwort präzise und auf den Punkt.
+"""
+        user_prompt = f"""Hier ist der relevante Kontext aus dem Dokument:
+
+{context_text}
+
+Frage: {question}"""
+
+        try:
+            logger.info(f"Generiere Antwort für Frage: '{question[:30]}...' (Kontext-Länge: {len(context_text)} Zeichen)")
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.2, # Niedrige Temperatur für fokussierte, faktenbasierte Antworten
+                max_tokens=800
+            )
+            return response.choices[0].message.content.strip()
+            
+        except Exception as e:
+            logger.error(f"Fehler bei ask_question: {e}")
+            return f"Es gab einen Fehler bei der KI-Verarbeitung: {str(e)}"
+
 if __name__ == "__main__":
     # Test script
     import sys

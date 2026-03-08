@@ -343,6 +343,127 @@
             color: #334155;
         }
 
+        /* Chat UI */
+        .chat-section {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            margin-bottom: 2.5rem;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+
+        .chat-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f8fafc;
+        }
+
+        .chat-header h2 {
+            margin: 0;
+            font-size: 1.25rem;
+            color: var(--primary);
+        }
+
+        .chat-controls select {
+            padding: 0.5rem;
+            border-radius: 0.375rem;
+            border: 1px solid var(--border);
+            font-family: inherit;
+            color: var(--text-main);
+        }
+
+        .chat-messages {
+            height: 400px;
+            overflow-y: auto;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            background: #f8fafc;
+        }
+
+        .msg {
+            max-width: 85%;
+            padding: 1rem;
+            border-radius: 1rem;
+            animation: fadeIn 0.3s ease-out;
+            line-height: 1.5;
+        }
+
+        .msg-user {
+            align-self: flex-end;
+            background: var(--primary);
+            color: white;
+            border-bottom-right-radius: 0.25rem;
+        }
+
+        .msg-ai {
+            align-self: flex-start;
+            background: white;
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            border-bottom-left-radius: 0.25rem;
+            box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+        }
+
+        .msg-sources {
+            margin-top: 0.75rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid var(--border);
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .source-tag {
+            display: inline-block;
+            background: #e2e8f0;
+            padding: 0.15rem 0.5rem;
+            border-radius: 0.25rem;
+            margin-right: 0.5rem;
+            margin-bottom: 0.25rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .source-tag:hover {
+            background: #cbd5e1;
+        }
+
+        .chat-input-area {
+            padding: 1.5rem;
+            background: white;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .chat-input-area input {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-family: inherit;
+        }
+
+        .chat-input-area input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
         /* Spinner */
         .spinner {
             width: 20px;
@@ -390,6 +511,27 @@
                 </button>
             </form>
             <div id="status-box"></div>
+        </div>
+
+        <!-- RAG Chat Section -->
+        <div class="chat-section">
+            <div class="chat-header">
+                <h2>KI-Assistent (Fragen zum Dokument)</h2>
+                <div class="chat-controls">
+                    <select id="chat-doc-select">
+                        <option value="">Alle Dokumente durchsuchen</option>
+                    </select>
+                </div>
+            </div>
+            <div class="chat-messages" id="chat-messages">
+                <div class="msg msg-ai">
+                    Hallo! Ich bin dein KI-Assistent. Wähle ein Dokument aus (oder suche in allen) und stelle mir eine Frage zu deinen hochgeladenen PDFs.
+                </div>
+            </div>
+            <form class="chat-input-area" id="chat-form">
+                <input type="text" id="chat-input" placeholder="Stelle eine Frage zu deinen Dokumenten..." autocomplete="off" required>
+                <button type="submit" class="btn btn-primary" style="margin:0; width:auto;">Senden</button>
+            </form>
         </div>
 
         <!-- Documents List -->
@@ -540,6 +682,18 @@
         }
 
         function renderDocuments(docs) {
+            // Update Chat Dropdown
+            const chatSelect = document.getElementById('chat-doc-select');
+            const currentSelection = chatSelect.value;
+            chatSelect.innerHTML = '<option value="">Alle Dokumente durchsuchen</option>';
+            docs.filter(d => d.status === 'structured').forEach(d => {
+                const opt = document.createElement('option');
+                opt.value = d.doc_id;
+                opt.textContent = `Nur: ${d.filename}`;
+                chatSelect.appendChild(opt);
+            });
+            chatSelect.value = currentSelection; // Restore previous selection if possible
+
             if (!docs.length) {
                 docsList.innerHTML = '<p style="color: var(--text-muted); grid-column: 1/-1; text-align: center;">Keine Dokumente gefunden.</p>';
                 return;
@@ -713,10 +867,6 @@
             if (e.target === modal) closeModal();
         });
 
-        /**
-         * New: Helper function to prevent Summaries/Keywords from being interpreted as HTML.
-         * (Security + prevents broken layout with special characters.)
-         */
         function escapeHtml(text) {
             return text
                 .replaceAll("&", "&amp;")
@@ -725,6 +875,80 @@
                 .replaceAll('"', "&quot;")
                 .replaceAll("'", "&#039;");
         }
+
+        // Chat Form Logic
+        const chatForm = document.getElementById('chat-form');
+        const chatInput = document.getElementById('chat-input');
+        const chatMessages = document.getElementById('chat-messages');
+        const chatSelect = document.getElementById('chat-doc-select');
+
+        function appendMessage(role, content, sources = []) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `msg msg-${role}`;
+            
+            // Text content
+            const textDiv = document.createElement('div');
+            textDiv.style.whiteSpace = 'pre-wrap';
+            textDiv.textContent = content;
+            msgDiv.appendChild(textDiv);
+            
+            // Sources
+            if (sources && sources.length > 0) {
+                const sourcesDiv = document.createElement('div');
+                sourcesDiv.className = 'msg-sources';
+                sourcesDiv.innerHTML = '<strong style="color:var(--text-main);">Gefundene Quellen (Chunks):</strong><br>';
+                
+                sources.forEach((s, idx) => {
+                    const tag = document.createElement('span');
+                    tag.className = 'source-tag';
+                    const pageStr = s.page_num ? `S. ${s.page_num}` : 'Unbekkannt';
+                    const scoreStr = s.score ? Math.round(s.score * 100) + '%' : '';
+                    tag.textContent = `[${idx+1}] ${pageStr} Relevanz: ${scoreStr}`;
+                    tag.title = s.preview;
+                    sourcesDiv.appendChild(tag);
+                });
+                msgDiv.appendChild(sourcesDiv);
+            }
+            
+            chatMessages.appendChild(msgDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            return msgDiv;
+        }
+
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const question = chatInput.value.trim();
+            if(!question) return;
+            
+            const docId = chatSelect.value;
+            
+            // User message ui
+            appendMessage('user', question);
+            chatInput.value = '';
+            
+            // Loading message ui
+            const loadingMsg = appendMessage('ai', 'Ich durchsuche die Dokumente und überlege... ⏳');
+            
+            try {
+                const res = await fetch('/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question: question, doc_id: docId || null })
+                });
+                const data = await res.json();
+                
+                loadingMsg.remove();
+                
+                if(data.success) {
+                    appendMessage('ai', data.data.answer, data.data.sources);
+                } else {
+                    appendMessage('ai', `Fehler: ${data.error}`);
+                }
+            } catch (err) {
+                loadingMsg.remove();
+                appendMessage('ai', 'Lokaler Netzwerkfehler beim Abrufen der Antwort.');
+            }
+        });
 
     </script>
 </body>
