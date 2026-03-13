@@ -2,7 +2,7 @@
 
 *English Version | [Deutsche Version](README_DE.md)*
 
-A production-ready system for PDF processing with AI-powered text extraction, structuring, and keyword search capabilities.
+A production-ready system for intelligent PDF processing with AI-powered OCR, text extraction, semantic search (RAG), entity extraction, and automatic document categorization.
 
 ---
 
@@ -11,28 +11,27 @@ A production-ready system for PDF processing with AI-powered text extraction, st
 ### Overview
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     Web Interface (Flask)                    │
-│              Upload • Search • View • Download               │
-└──────────────────────┬──────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│               Web Interface (Flask + Premium Glassmorphism UI)    │
+│     Upload • KI-Chat (RAG) • Entity Extraction • Categorization   │
+└──────────────────────┬───────────────────────────────────────────┘
                        │
                        ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Application Layer                         │
-│                       (app.py)                               │
-│     API Endpoints • Request Routing • Task Coordination     │
-└───┬────────────┬────────────┬────────────────┬─────────────┘
-    │            │            │                │
-    ▼            ▼            ▼                ▼
-┌─────────┐ ┌─────────┐ ┌──────────┐ ┌────────────────┐
-│   PDF   │ │Database │ │    AI    │ │   GridFS       │
-│Processor│ │ Manager │ │Processor │ │ File Storage   │
-└─────────┘ └─────────┘ └──────────┘ └────────────────┘
-    │            │            │                │
-    ▼            ▼            ▼                ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                    Application Layer (app.py)                     │
+│       API Endpoints • Request Routing • Task Coordination         │
+└───┬────────────┬────────────┬──────────────┬────────────────────-┘
+    │            │            │              │
+    ▼            ▼            ▼              ▼
+┌─────────┐ ┌─────────┐ ┌──────────┐ ┌──────────────┐
+│   PDF   │ │Database │ │    AI    │ │   Qdrant     │
+│Processor│ │ Manager │ │Processor │ │ Vector Store │
+└─────────┘ └─────────┘ └──────────┘ └──────────────┘
+    │            │            │
+    ▼            ▼            ▼
 ┌─────────┐ ┌──────────────────────────────────────┐
-│OCRmyPDF │ │         MongoDB Database             │
-│Tesseract│ │  • documents  • pages  • GridFS     │
+│OCRmyPDF │ │           MongoDB Database            │
+│Tesseract│ │  • documents  • pages  • GridFS      │
 └─────────┘ └──────────────────────────────────────┘
 ```
 
@@ -46,7 +45,6 @@ A production-ready system for PDF processing with AI-powered text extraction, st
 - OCRmyPDF for superior OCR quality (German + English)
 - Automatic scanned document detection
 - Pytesseract fallback for individual pages
-- Temporary file management
 
 #### 2. **database.py** - Data Persistence & Storage
 **Purpose:** Manage MongoDB operations and file storage
@@ -55,26 +53,35 @@ A production-ready system for PDF processing with AI-powered text extraction, st
 - Separated collections (documents + pages)
 - GridFS for unlimited PDF file size
 - Text indexes for keyword search
-- CRUD operations with error handling
+- Full CRUD operations with error handling
 
-#### 3. **ai_processor.py** - AI-Powered Structuring
-**Purpose:** Generate summaries, keywords, and structured data
+#### 3. **ai_processor.py** - AI-Powered Intelligence Hub
+**Purpose:** Summaries, keywords, RAG, entity extraction, and categorization
 
 **Key Features:**
-- OpenAI GPT integration
-- Page summaries (50-100 words)
-- Keyword extraction (5-15 per page)
-- Smart text truncation (8000 chars)
-- Comprehensive error logging
+- OpenAI `gpt-4o-mini` integration
+- Page-level summaries and keyword extraction
+- Retrieval-Augmented Generation (RAG) with Qdrant vector search
+- Named Entity Extraction (persons, companies, amounts, dates, addresses)
+- Automatic document categorization (smart tags)
+- Follow-up question suggestions
 
 #### 4. **app.py** - Web Application & API
 **Purpose:** HTTP interface and request handling
 
 **Key Features:**
 - RESTful API endpoints
-- Asynchronous AI processing
-- File upload management
-- Web interface
+- Asynchronous AI processing (background threads)
+- File upload management (drag & drop)
+- Cross-document RAG queries
+
+#### 5. **qdrant_manager.py** - Vector Search Engine
+**Purpose:** Manage vector embeddings for semantic document search
+
+**Key Features:**
+- Qdrant vector database integration
+- OpenAI `text-embedding-ada-002` embeddings
+- Semantic similarity search across documents
 
 ### Data Structure
 
@@ -85,8 +92,9 @@ A production-ready system for PDF processing with AI-powered text extraction, st
   filename: "report.pdf",
   pdf_file_id: "gridfs-id",        // Original PDF in GridFS
   total_pages: 10,
-  document_summary: "...",          // AI-generated
-  keywords: ["key1", "key2"],       // AI-extracted
+  document_summary: "...",          // AI-generated summary
+  document_keywords: ["key1"],      // AI-extracted keywords
+  category: "Rechnung",             // AI auto-categorized tag
   status: "structured",
   created_at: "2026-01-21T..."
 }
@@ -98,6 +106,7 @@ A production-ready system for PDF processing with AI-powered text extraction, st
   raw_text: "Full page text...",   // OCR-extracted
   page_summary: "...",              // AI-generated
   keywords: ["word1", "word2"],     // AI-extracted
+  embedding: [0.1, 0.2, ...],      // Vector for semantic search
   structured_data: {
     sections: [...],
     measurements: [...],
@@ -124,9 +133,7 @@ fs.chunks: { files_id, n, data }  // 255KB chunks
    • Automatic deskewing
    • Image optimization
    ↓
-4. PyMuPDF text extraction
-   • Extract text from all pages
-   • Preserve layout information
+4. PyMuPDF text extraction (all pages)
    ↓
 5. Store in MongoDB
    • Original PDF → GridFS
@@ -134,13 +141,14 @@ fs.chunks: { files_id, n, data }  // 255KB chunks
    • Page data → pages collection
    ↓
 6. AI processing (async background)
-   • Generate summaries
-   • Extract keywords
-   • Structure data
+   • Generate page summaries & keywords
+   • Create vector embeddings → Qdrant
+   • Generate document-level summary
+   • Auto-categorize document (smart tag)
    ↓
 7. Update database with AI results
    ↓
-8. Ready for search & download
+8. Ready for RAG chat, entity extraction, search & download
 ```
 
 ---
@@ -150,9 +158,12 @@ fs.chunks: { files_id, n, data }  // 255KB chunks
 - 📄 **High-Quality OCR**: OCRmyPDF + Tesseract for German/English documents
 - 💾 **GridFS Storage**: Store original PDFs (no size limits)
 - 🧠 **AI Structuring**: Automatic summaries, keywords, and structured data
-- 🔍 **Keyword Search**: Full-text search with MongoDB indexes
+- 💬 **RAG Chat**: Ask questions about your documents (single or cross-document)
+- 🔍 **Semantic Search**: Vector-based search via Qdrant + keyword fallback
+- 🏷️ **Auto-Categorization**: AI assigns document categories (Rechnung, Vertrag, etc.)
+- 🗂️ **Entity Extraction**: Extract persons, companies, amounts, dates & addresses into tables
 - 📥 **Download Support**: Retrieve original PDF files
-- 🌐 **Web Interface**: Modern drag & drop UI
+- 🌐 **Premium UI**: Glassmorphism design with animations and multi-select chip UI
 - ⚡ **Async Processing**: Non-blocking background AI processing
 
 ---
@@ -164,6 +175,7 @@ fs.chunks: { files_id, n, data }  // 255KB chunks
 - **Tesseract OCR**
 - **OCRmyPDF** (optional but recommended)
 - **OpenAI API Key**
+- **Qdrant** (optional, for vector search; falls back to keyword search)
 
 ---
 
@@ -194,7 +206,7 @@ cd pdf-processor
 pip install -r requirements.txt
 
 # Configure environment
-# Create .env file with your OpenAI API key
+# Create .env file (see Configuration section)
 ```
 
 ### 5. Run
@@ -223,8 +235,10 @@ Open: http://localhost:5000
 | POST | `/upload` | Upload PDF file |
 | GET | `/documents` | List all documents |
 | GET | `/search?q={query}` | Search by keyword |
+| POST | `/ask` | RAG chat query (cross-document) |
+| POST | `/extract` | Extract entities from a document |
 | GET | `/document/{id}/status` | Get processing status |
-| GET | `/document/{id}/structured` | Get structured data |
+| GET | `/document/{id}/structured` | Get structured data & summary |
 | GET | `/document/{id}/download` | Download original PDF |
 | DELETE | `/document/{id}` | Delete document |
 
@@ -234,10 +248,22 @@ Open: http://localhost:5000
 # Upload PDF
 curl -X POST http://localhost:5000/upload -F "file=@document.pdf"
 
-# Search
-curl "http://localhost:5000/search?q=invoice&limit=10"
+# RAG Chat (single document)
+curl -X POST http://localhost:5000/ask \
+     -H "Content-Type: application/json" \
+     -d '{"question": "What are the key findings?", "doc_ids": ["uuid-123"]}'
 
-# Download
+# Cross-Document RAG (all documents)
+curl -X POST http://localhost:5000/ask \
+     -H "Content-Type: application/json" \
+     -d '{"question": "Compare the contracts", "doc_ids": null}'
+
+# Entity Extraction
+curl -X POST http://localhost:5000/extract \
+     -H "Content-Type: application/json" \
+     -d '{"doc_id": "uuid-123", "entity_types": ["personen", "betraege"]}'
+
+# Download original
 curl -o original.pdf "http://localhost:5000/document/{doc_id}/download"
 ```
 
@@ -248,12 +274,14 @@ curl -o original.pdf "http://localhost:5000/document/{doc_id}/download"
 | Component | Technology | Purpose |
 |-----------|------------|---------|
 | **Backend** | Flask 3.0 | Web framework & API |
-| **Database** | MongoDB 4.6+ | Document storage |
-| **File Storage** | GridFS | Large file handling |
+| **Database** | MongoDB 4.6+ | Document metadata & page storage |
+| **File Storage** | GridFS | Large PDF file handling |
+| **Vector DB** | Qdrant | Semantic search & RAG |
 | **PDF Processing** | PyMuPDF | Text extraction |
-| **OCR** | OCRmyPDF + Tesseract | Text recognition |
-| **AI** | OpenAI GPT-3.5/4 | Text structuring |
-| **Frontend** | HTML/JS | Web interface |
+| **OCR** | OCRmyPDF + Tesseract | Text recognition (scanned PDFs) |
+| **AI** | OpenAI gpt-4o-mini | Summarization, RAG, extraction, categorization |
+| **Embeddings** | text-embedding-ada-002 | Vector search |
+| **Frontend** | HTML / CSS / JavaScript | Glassmorphism Premium UI |
 
 ---
 
@@ -270,6 +298,11 @@ MONGO_URI=mongodb://localhost:27017/
 DB_NAME=pdf_intelligence_db
 UPLOAD_FOLDER=uploads/
 MAX_CONTENT_LENGTH=52428800  # 50MB
+OPENAI_MODEL=gpt-4o-mini
+
+# Qdrant (optional - falls back to keyword search if not set)
+QDRANT_HOST=localhost
+QDRANT_PORT=6333
 ```
 
 ---
@@ -280,6 +313,7 @@ MAX_CONTENT_LENGTH=52428800  # 50MB
 - **[UPGRADE_NOTES.md](UPGRADE_NOTES.md)** - Phase 1 implementation details (English)
 - **[UPGRADE_NOTES_DE.md](UPGRADE_NOTES_DE.md)** - Phase 1 implementation details (Deutsch)
 - **[README_DE.md](README_DE.md)** - German version of this file
+- **[tests/README.md](tests/README.md)** - Testing guide
 
 ---
 
@@ -301,8 +335,10 @@ OPENAI_API_KEY=sk-proj-your-key-here
 ```bash
 pip install ocrmypdf
 ```
-
 **Note:** System works without OCRmyPDF but with lower OCR quality.
+
+### Qdrant Not Available
+The system automatically falls back to MongoDB keyword search if Qdrant is not running. RAG chat will still work but with keyword-based context retrieval instead of semantic vector search.
 
 ---
 
@@ -310,39 +346,45 @@ pip install ocrmypdf
 
 ```
 pdf-processor/
-├── app.py                    # Flask application
-├── database.py               # MongoDB & GridFS
-├── ai_processor.py           # OpenAI integration
+├── app.py                    # Flask application & API routes
+├── database.py               # MongoDB & GridFS management
+├── ai_processor.py           # AI: RAG, extraction, categorization
 ├── pdf_processor.py          # PDF & OCR processing
+├── qdrant_manager.py         # Vector search (Qdrant)
 ├── requirements.txt          # Python dependencies
-├── .env                      # Configuration
+├── .env                      # Configuration (not in git)
 ├── README.md                 # This file (English)
 ├── README_DE.md              # German version
 ├── UPGRADE_NOTES.md          # Upgrade details (English)
 ├── UPGRADE_NOTES_DE.md       # Upgrade details (Deutsch)
 ├── QUICKSTART.md             # Quick start guide
+├── test_auto_category.py     # Auto-categorization test script
 ├── templates/                # HTML templates
+│   └── index.html            # Premium Glassmorphism single-page UI
 ├── tests/                    # Test scripts
 │   ├── test_mongodb_connection.py
-│   └── README.md
-└── uploads/                  # Uploaded PDFs
+│   ├── test_complete_workflow.py
+│   └── README.md             # Testing guide
+└── uploads/                  # Uploaded PDFs (temporary)
 ```
 
 ---
 
-## 🎯 Next Steps
+## 🎯 What You Can Do
 
-After setup, you can:
-1. Upload PDFs via web interface
-2. Search documents by keywords
-3. View structured data (summaries, keywords, tables)
-4. Download original PDFs
-
-For advanced features and Phase 2 planning (Vector DB, RAG), see [UPGRADE_NOTES.md](UPGRADE_NOTES.md).
+After setup:
+1. **Upload** PDFs via drag & drop
+2. **Chat** with your documents using natural language (RAG)
+3. **Cross-Document Analysis**: Ask questions across multiple documents simultaneously
+4. **Extract Entities**: Get structured tables of persons, companies, dates, etc.
+5. **Auto-Categorized Tags**: Each document is automatically tagged (e.g. "Rechnung", "Vertrag")
+6. **Search** documents by keywords
+7. **View** full AI analysis (summaries, keywords, page breakdown)
+8. **Download** original PDFs
 
 ---
 
-**Version:** 2.0.1  
+**Version:** 3.0.0  
 **Status:** Production Ready  
 **OCR Quality:** ⭐⭐⭐⭐⭐  
-**Last Updated:** January 2026
+**Last Updated:** March 2026
