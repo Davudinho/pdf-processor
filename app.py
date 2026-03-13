@@ -289,11 +289,12 @@ def download_pdf(doc_id):
 @app.route('/ask', methods=['POST'])
 def ask_question():
     """
-    RAG-Endpunkt: Beantwortet Fragen zu einem Dokument oder der gesamten Datenbank.
+    RAG-Endpunkt: Beantwortet Fragen zu Dokumenten oder der gesamten Datenbank.
     
     Erwartet JSON:
     {
-        "doc_id": "optional_document_id_to_filter",
+        "doc_ids": ["id1", "id2"],  // Liste von Dokument-IDs (Cross-Document)
+        "doc_id": "single_id",      // Rückwärtskompatibel: einzelne ID
         "question": "Was ist der Gesamtbetrag der Rechnung?"
     }
     """
@@ -305,22 +306,25 @@ def ask_question():
     if not question:
         return jsonify({"success": False, "error": "Empty question"}), 400
         
-    doc_id = data.get('doc_id') # Optional: Wenn leer, wird über alle Dokumente gesucht
+    # Cross-Document: Akzeptiere doc_ids (Liste) oder doc_id (String) für Rückwärtskompatibilität
+    doc_ids = data.get('doc_ids')  # Neue Variante: Liste von IDs
+    if not doc_ids:
+        single_id = data.get('doc_id')  # Alte Variante: einzelne ID
+        doc_ids = [single_id] if single_id else None
     
     if not qdrant_manager.is_connected():
         return jsonify({"success": False, "error": "Vektor-Datenbank (Qdrant) ist nicht erreichbar. RAG deaktiviert."}), 503
         
     try:
         # Step 1: Embedding für die Frage erstellen
-        logger.info(f"RAG: Frage '{question}' (doc_id={doc_id})")
+        logger.info(f"RAG: Frage '{question}' (doc_ids={doc_ids})")
         query_embedding = ai_processor.create_embedding(question)
         
         if not query_embedding:
             return jsonify({"success": False, "error": "Konnte Frage nicht analysieren (Embedding fehlgeschlagen)."}), 500
             
-        # Step 2: Ähnliche Chunks aus Qdrant suchen
-        # Wir holen die Top 5 relevantesten Textabschnitte
-        hits = qdrant_manager.search_similar(query_embedding, limit=5, doc_id=doc_id)
+        # Step 2: Ähnliche Chunks aus Qdrant suchen (unterstützt mehrere doc_ids)
+        hits = qdrant_manager.search_similar(query_embedding, limit=5, doc_ids=doc_ids)
         
         if not hits:
             return jsonify({
@@ -336,7 +340,9 @@ def ask_question():
         context_chunks = [hit["text"] for hit in hits]
         
         # Step 4: LLM mit Kontext + Frage aufrufen
-        answer = ai_processor.ask_question(question, context_chunks)
+        ai_response = ai_processor.ask_question(question, context_chunks)
+        answer = ai_response.get("answer", "Fehler beim Abrufen der Antwort.")
+        follow_ups = ai_response.get("follow_ups", [])
         
         # Step 5: Quellen aufbereiten für UI
         sources = []
@@ -344,6 +350,7 @@ def ask_question():
             sources.append({
                 "page_num": hit.get("page_num"),
                 "score": hit.get("score"),
+                "text": hit.get("text"),
                 "preview": hit.get("text")[:100] + "..." if len(hit.get("text", "")) > 100 else hit.get("text"),
             })
             
@@ -352,12 +359,69 @@ def ask_question():
             "data": {
                 "question": question,
                 "answer": answer,
+                "follow_ups": follow_ups,
                 "sources": sources
             }
         })
         
     except Exception as e:
         logger.error(f"Error in /ask endpoint: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/extract', methods=['POST'])
+def extract_entities():
+    """
+    Entity Extraction: Extrahiert strukturierte Daten (Personen, Firmen, Beträge etc.) aus einem Dokument.
+    
+    Erwartet JSON:
+    {
+        "doc_id": "document_id",
+        "entity_types": ["personen", "firmen", "betraege", "daten", "adressen"]
+    }
+    """
+    data = request.json
+    if not data or 'doc_id' not in data:
+        return jsonify({"success": False, "error": "Missing 'doc_id' in request body"}), 400
+
+    doc_id = data['doc_id']
+    entity_types = data.get('entity_types', [])
+    
+    if not entity_types:
+        return jsonify({"success": False, "error": "Keine Entity-Typen ausgewählt."}), 400
+
+    try:
+        # Kompletten Rohtext aller Seiten laden (NICHT RAG-basiert)
+        pages = db.get_raw_text(doc_id)
+        if not pages:
+            return jsonify({"success": False, "error": "Dokument nicht gefunden oder kein Text vorhanden."}), 404
+
+        # Alle Seiten zusammenfügen
+        full_text = "\n\n".join([
+            f"--- Seite {p.get('page_num', '?')} ---\n{p.get('raw_text', '')}" 
+            for p in pages if p.get('raw_text')
+        ])
+
+        if not full_text.strip():
+            return jsonify({"success": False, "error": "Dokument enthält keinen extrahierbaren Text."}), 400
+
+        logger.info(f"Entity Extraction für doc_id={doc_id}: {len(full_text)} Zeichen, Typen={entity_types}")
+
+        # KI-Extraktion
+        result = ai_processor.extract_entities(full_text, entity_types)
+
+        if "error" in result:
+            return jsonify({"success": False, "error": result["error"]}), 500
+
+        return jsonify({
+            "success": True,
+            "data": {
+                "doc_id": doc_id,
+                "entities": result
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Error in /extract endpoint: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 if __name__ == '__main__':

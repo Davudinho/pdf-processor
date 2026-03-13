@@ -4,97 +4,207 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF Intelligenz System</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <title>PDF Intelligenz System | Premium</title>
+    <!-- Modern Fonts: Outfit for sleek Headings, Inter for readable body text -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;600;700&display=swap"
+        rel="stylesheet">
     <style>
         :root {
-            --primary: #2563eb;
+            --primary: #3b82f6;
+            --primary-gradient: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
             --primary-hover: #1d4ed8;
             --secondary: #64748b;
-            --success: #16a34a;
-            --warning: #ca8a04;
-            --danger: #dc2626;
-            --bg: #f1f5f9;
-            --card-bg: #ffffff;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+
+            --bg-color: #f8fafc;
+            --card-bg: rgba(255, 255, 255, 0.75);
+            --card-border: rgba(255, 255, 255, 0.6);
+
             --text-main: #0f172a;
-            --text-muted: #475569;
+            --text-muted: #64748b;
             --border: #e2e8f0;
-            --radius: 0.75rem;
-            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --radius-lg: 1.25rem;
+            --radius-md: 0.875rem;
+            --shadow-sm: 0 4px 6px -1px rgb(0 0 0 / 0.05);
+            --shadow-lg: 0 20px 25px -5px rgb(0 0 0 / 0.05), 0 8px 10px -6px rgb(0 0 0 / 0.02);
         }
 
         * {
             box-sizing: border-box;
+            margin: 0;
+            padding: 0;
         }
 
         body {
             font-family: 'Inter', sans-serif;
-            background-color: var(--bg);
+            background-color: var(--bg-color);
+            /* Premium Mesh Gradient Background */
+            background-image:
+                radial-gradient(at 10% 20%, hsla(228, 100%, 74%, 0.15) 0px, transparent 50%),
+                radial-gradient(at 80% 10%, hsla(189, 100%, 56%, 0.12) 0px, transparent 50%),
+                radial-gradient(at 50% 80%, hsla(280, 100%, 74%, 0.12) 0px, transparent 50%);
+            background-attachment: fixed;
             color: var(--text-main);
-            margin: 0;
-            padding: 0;
             line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        /* Glassmorphism utility */
+        .glass-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
 
         .container {
-            max-width: 1024px;
-            margin: 2rem auto;
-            padding: 0 1.5rem;
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 3rem 1.5rem;
         }
 
         header {
-            margin-bottom: 3rem;
             text-align: center;
+            margin-bottom: 3.5rem;
+        }
+
+        h1,
+        h2,
+        h3,
+        .doc-title {
+            font-family: 'Outfit', sans-serif;
+            color: var(--text-main);
         }
 
         h1 {
-            color: var(--primary);
-            font-size: 2.25rem;
+            font-size: 2.75rem;
             font-weight: 700;
-            margin: 0 0 0.5rem 0;
-            letter-spacing: -0.025em;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.03em;
+            /* Gradient text */
+            background: var(--primary-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
         p.subtitle {
             color: var(--text-muted);
             font-size: 1.125rem;
-            margin: 0;
+            font-weight: 500;
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 1.5rem;
+            border-radius: var(--radius-md);
+            border: none;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .btn:active {
+            transform: scale(0.97);
+        }
+
+        .btn-primary {
+            background: var(--primary-gradient);
+            color: white;
+            box-shadow: 0 4px 14px 0 rgba(37, 99, 235, 0.3);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+        }
+
+        .btn-primary:disabled {
+            background: #cbd5e1;
+            box-shadow: none;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.85rem;
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+        }
+
+        .btn-outline:hover {
+            background: white;
+            border-color: var(--secondary);
+            color: var(--text-main);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .btn-danger {
+            background: #fef2f2;
+            color: var(--danger);
+            border: 1px solid #fecaca;
+        }
+
+        .btn-danger:hover {
+            background: #fee2e2;
+            border-color: var(--danger);
         }
 
         /* Upload Section */
         .upload-card {
-            background: var(--card-bg);
-            border-radius: var(--radius);
-            box-shadow: var(--shadow);
-            padding: 2.5rem;
+            padding: 3rem;
             text-align: center;
-            border: 2px dashed var(--border);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            margin-bottom: 2.5rem;
+            border: 2px dashed rgba(59, 130, 246, 0.3);
+            margin-bottom: 3rem;
             position: relative;
             overflow: hidden;
         }
 
         .upload-card.drag-active {
             border-color: var(--primary);
-            background-color: #eff6ff;
-            transform: scale(1.02);
+            background-color: rgba(239, 246, 255, 0.8);
+            transform: scale(1.01);
         }
 
         .upload-icon {
-            font-size: 3.5rem;
-            margin-bottom: 1rem;
-            color: var(--secondary);
-            transition: color 0.3s;
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 1.5rem;
+            background: #eff6ff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.75rem;
+            color: var(--primary);
+            box-shadow: 0 0 0 10px rgba(239, 246, 255, 0.5);
+            transition: all 0.3s ease;
         }
 
         .upload-card.drag-active .upload-icon {
-            color: var(--primary);
+            transform: scale(1.1);
+            background: #dbeafe;
         }
 
         .file-label {
             display: inline-block;
             cursor: pointer;
+            font-size: 1.1rem;
         }
 
         .file-label strong {
@@ -110,119 +220,391 @@
             display: none;
         }
 
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: 0.75rem 1.5rem;
-            border-radius: 0.5rem;
-            border: none;
-            font-weight: 600;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: background-color 0.2s, transform 0.1s;
-        }
-
-        .btn:active {
-            transform: translateY(1px);
-        }
-
-        .btn-primary {
-            background-color: var(--primary);
-            color: white;
+        #upload-btn {
             margin-top: 1.5rem;
-            width: 100%;
-            max-width: 200px;
-        }
-
-        .btn-primary:hover {
-            background-color: var(--primary-hover);
-        }
-
-        .btn-primary:disabled {
-            background-color: var(--secondary);
-            cursor: not-allowed;
-        }
-
-        .btn-sm {
-            padding: 0.4rem 0.8rem;
-            font-size: 0.875rem;
-        }
-
-        .btn-outline {
-            background: transparent;
-            border: 1px solid var(--border);
-            color: var(--text-muted);
-        }
-
-        .btn-outline:hover {
-            background: #f8fafc;
-            border-color: var(--secondary);
-            color: var(--text-main);
-        }
-
-        .btn-danger {
-            background: #fef2f2;
-            color: var(--danger);
-            border: 1px solid #fecaca;
-        }
-
-        .btn-danger:hover {
-            background: #fee2e2;
-            border-color: var(--danger);
+            min-width: 200px;
         }
 
         /* Status & Feedback */
         #status-box {
             display: none;
-            margin-top: 1rem;
-            padding: 1rem;
-            border-radius: 0.5rem;
+            margin-top: 1.5rem;
+            padding: 1rem 1.5rem;
+            border-radius: var(--radius-md);
             font-weight: 500;
+            font-size: 0.95rem;
+            animation: fadeIn 0.3s ease-out;
         }
 
         .status-success {
-            background: #dcfce7;
-            color: #166534;
+            background: rgba(209, 250, 229, 0.8);
+            border: 1px solid #a7f3d0;
+            color: #065f46;
         }
 
         .status-error {
-            background: #fee2e2;
+            background: rgba(254, 226, 226, 0.8);
+            border: 1px solid #fecaca;
             color: #991b1b;
         }
 
-        .status-loading {
+        .badge-category {
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--primary);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            padding: 0.15rem 0.55rem;
+            border-radius: 99px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            line-height: 1.2;
+            display: inline-flex;
+            align-items: center;
+            white-space: nowrap;
+            letter-spacing: 0.02em;
+        }
+
+        /* Chat UI */
+        .chat-section {
+            margin-bottom: 3rem;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            height: 600px;
+        }
+
+        .chat-header {
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+        .chat-header h2 {
+            font-size: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Multi-Select Chip System */
+        .multi-select-container {
+            position: relative;
+            min-width: 240px;
+        }
+
+        .multi-select-trigger {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+            padding: 0.45rem 0.75rem;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border);
+            font-family: inherit;
+            font-size: 0.9rem;
+            color: var(--text-main);
+            background: white;
+            cursor: pointer;
+            min-height: 42px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .multi-select-trigger:hover {
+            border-color: var(--secondary);
+        }
+
+        .multi-select-trigger.active {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .multi-select-placeholder {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .doc-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+            color: var(--primary);
+            border: 1px solid #bfdbfe;
+            padding: 0.2rem 0.55rem;
+            border-radius: 99px;
+            font-size: 0.78rem;
+            font-weight: 500;
+            max-width: 150px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        .doc-chip-remove {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            color: var(--primary);
+            font-size: 0.7rem;
+            flex-shrink: 0;
+            transition: background 0.15s;
+            padding: 0;
+            line-height: 1;
+        }
+
+        .doc-chip-remove:hover {
+            background: rgba(59, 130, 246, 0.15);
+        }
+
+        .multi-select-dropdown {
+            position: absolute;
+            top: calc(100% + 6px);
+            right: 0;
+            min-width: 280px;
+            max-height: 260px;
+            overflow-y: auto;
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            z-index: 100;
+            display: none;
+            animation: slideUp 0.2s ease-out;
+        }
+
+        .multi-select-dropdown.open {
+            display: block;
+        }
+
+        .multi-select-option {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.65rem 1rem;
+            cursor: pointer;
+            font-size: 0.88rem;
+            transition: background 0.15s;
+            border-bottom: 1px solid #f8fafc;
+        }
+
+        .multi-select-option:last-child {
+            border-bottom: none;
+        }
+
+        .multi-select-option:hover {
+            background: #f8fafc;
+        }
+
+        .multi-select-option.selected {
             background: #eff6ff;
-            color: #1e40af;
+        }
+
+        .ms-checkbox {
+            width: 18px;
+            height: 18px;
+            border-radius: 4px;
+            border: 2px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.15s;
+        }
+
+        .multi-select-option.selected .ms-checkbox {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .ms-checkbox-check {
+            display: none;
+        }
+
+        .multi-select-option.selected .ms-checkbox-check {
+            display: block;
+        }
+
+        .ms-doc-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .ms-empty {
+            padding: 1.5rem;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .msg {
+            max-width: 80%;
+            padding: 1.1rem 1.4rem;
+            animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            line-height: 1.5;
+            position: relative;
+        }
+
+        .msg-user {
+            align-self: flex-end;
+            background: var(--primary-gradient);
+            color: white;
+            border-radius: 1.25rem 1.25rem 0.25rem 1.25rem;
+            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.15);
+        }
+
+        .msg-ai {
+            align-self: flex-start;
+            background: white;
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            border-radius: 1.25rem 1.25rem 1.25rem 0.25rem;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .msg-sources {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .source-tag {
+            display: inline-flex;
+            align-items: center;
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            padding: 0.3rem 0.75rem;
+            border-radius: 99px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .source-tag:hover {
+            background: #e2e8f0;
+            color: var(--text-main);
+            transform: translateY(-1px);
+        }
+
+        .chat-input-area {
+            padding: 1.5rem 2rem;
+            background: rgba(255, 255, 255, 0.8);
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 1rem;
+        }
+
+        .chat-input-area input {
+            flex: 1;
+            padding: 1rem 1.25rem;
+            border: 1px solid var(--border);
+            border-radius: 99px;
+            font-size: 1rem;
+            font-family: inherit;
+            background: white;
+            transition: all 0.2s;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
+        }
+
+        .chat-input-area input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+        }
+
+        .btn-send {
+            border-radius: 99px;
+            padding: 0 2rem;
+        }
+
+        /* Typing Indicator */
+        .typing-indicator {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 0.5rem 0;
+        }
+
+        .typing-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--text-muted);
+            border-radius: 50%;
+            animation: typing 1.4s infinite ease-in-out both;
+        }
+
+        .typing-dot:nth-child(1) {
+            animation-delay: -0.32s;
+        }
+
+        .typing-dot:nth-child(2) {
+            animation-delay: -0.16s;
+        }
+
+        @keyframes typing {
+
+            0%,
+            80%,
+            100% {
+                transform: scale(0);
+                opacity: 0.5;
+            }
+
+            40% {
+                transform: scale(1);
+                opacity: 1;
+            }
         }
 
         /* Documents List */
         .docs-section h2 {
             font-size: 1.5rem;
             margin-bottom: 1.5rem;
-            padding-bottom: 0.5rem;
-            border-bottom: 1px solid var(--border);
         }
 
         .doc-list {
             display: grid;
-            gap: 1rem;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
         }
 
         .doc-card {
-            background: var(--card-bg);
-            border-radius: var(--radius);
-            box-shadow: var(--shadow);
-            padding: 1.5rem;
+            padding: 1.75rem;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            transition: transform 0.2s;
         }
 
         .doc-card:hover {
-            transform: translateY(-2px);
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
         }
 
         .doc-header {
@@ -231,44 +613,64 @@
 
         .doc-title {
             font-weight: 600;
-            font-size: 1.1rem;
-            color: var(--text-main);
+            font-size: 1.15rem;
             margin-bottom: 0.25rem;
+            white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            white-space: nowrap;
         }
 
         .doc-meta {
-            font-size: 0.875rem;
+            font-size: 0.85rem;
             color: var(--text-muted);
         }
 
         .doc-status {
-            display: inline-block;
-            padding: 0.25rem 0.75rem;
-            border-radius: 9999px;
+            display: inline-flex;
+            align-items: center;
+            padding: 0.35rem 0.85rem;
+            border-radius: 99px;
             font-size: 0.75rem;
             font-weight: 600;
-            margin-top: 0.75rem;
+            margin-top: 1rem;
             text-transform: uppercase;
             letter-spacing: 0.05em;
         }
 
+        .doc-status::before {
+            content: '';
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+
         .badge-processing {
-            background: #fef9c3;
-            color: #854d0e;
+            background: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fde68a;
+        }
+
+        .badge-processing::before {
+            background: #f59e0b;
+            animation: pulse 2s infinite;
         }
 
         .badge-completed {
             background: #dcfce7;
-            color: #15803d;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+        }
+
+        .badge-completed::before {
+            background: #10b981;
         }
 
         .doc-actions {
             margin-top: 1.5rem;
             display: flex;
-            gap: 0.5rem;
+            gap: 0.75rem;
         }
 
         .doc-actions .btn {
@@ -282,14 +684,15 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
+            background: rgba(15, 23, 42, 0.4);
+            backdrop-filter: blur(4px);
             display: flex;
             align-items: center;
             justify-content: center;
             z-index: 1000;
             opacity: 0;
             pointer-events: none;
-            transition: opacity 0.2s;
+            transition: opacity 0.3s ease;
         }
 
         .modal-overlay.open {
@@ -300,16 +703,22 @@
         .modal {
             background: white;
             width: 90%;
-            max-width: 900px;
-            max-height: 90vh;
-            border-radius: var(--radius);
+            max-width: 800px;
+            max-height: 85vh;
+            border-radius: var(--radius-lg);
             display: flex;
             flex-direction: column;
-            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            transform: scale(0.95);
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .modal-overlay.open .modal {
+            transform: scale(1);
         }
 
         .modal-header {
-            padding: 1.5rem;
+            padding: 1.5rem 2rem;
             border-bottom: 1px solid var(--border);
             display: flex;
             justify-content: space-between;
@@ -322,156 +731,78 @@
         }
 
         .close-btn {
-            background: none;
+            background: #f1f5f9;
             border: none;
-            font-size: 1.5rem;
-            cursor: pointer;
-            color: var(--text-muted);
-        }
-
-        .modal-content {
-            padding: 1.5rem;
-            overflow-y: auto;
-            flex: 1;
-            font-family: monospace;
-            background: #f8fafc;
-        }
-
-        .json-tree {
-            white-space: pre-wrap;
-            word-break: break-all;
-            color: #334155;
-        }
-
-        /* Chat UI */
-        .chat-section {
-            background: var(--card-bg);
-            border-radius: var(--radius);
-            box-shadow: var(--shadow);
-            margin-bottom: 2.5rem;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
             display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            border: 1px solid var(--border);
-        }
-
-        .chat-header {
-            padding: 1.5rem;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            justify-content: space-between;
             align-items: center;
-            background: #f8fafc;
-        }
-
-        .chat-header h2 {
-            margin: 0;
+            justify-content: center;
             font-size: 1.25rem;
-            color: var(--primary);
-        }
-
-        .chat-controls select {
-            padding: 0.5rem;
-            border-radius: 0.375rem;
-            border: 1px solid var(--border);
-            font-family: inherit;
-            color: var(--text-main);
-        }
-
-        .chat-messages {
-            height: 400px;
-            overflow-y: auto;
-            padding: 1.5rem;
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-            background: #f8fafc;
-        }
-
-        .msg {
-            max-width: 85%;
-            padding: 1rem;
-            border-radius: 1rem;
-            animation: fadeIn 0.3s ease-out;
-            line-height: 1.5;
-        }
-
-        .msg-user {
-            align-self: flex-end;
-            background: var(--primary);
-            color: white;
-            border-bottom-right-radius: 0.25rem;
-        }
-
-        .msg-ai {
-            align-self: flex-start;
-            background: white;
-            color: var(--text-main);
-            border: 1px solid var(--border);
-            border-bottom-left-radius: 0.25rem;
-            box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
-        }
-
-        .msg-sources {
-            margin-top: 0.75rem;
-            padding-top: 0.75rem;
-            border-top: 1px solid var(--border);
-            font-size: 0.85rem;
-            color: var(--text-muted);
-        }
-
-        .source-tag {
-            display: inline-block;
-            background: #e2e8f0;
-            padding: 0.15rem 0.5rem;
-            border-radius: 0.25rem;
-            margin-right: 0.5rem;
-            margin-bottom: 0.25rem;
-            font-size: 0.75rem;
             cursor: pointer;
+            color: var(--text-muted);
             transition: background 0.2s;
         }
 
-        .source-tag:hover {
-            background: #cbd5e1;
+        .close-btn:hover {
+            background: #e2e8f0;
+            color: var(--text-main);
         }
 
-        .chat-input-area {
-            padding: 1.5rem;
-            background: white;
-            border-top: 1px solid var(--border);
-            display: flex;
-            gap: 0.75rem;
-        }
-
-        .chat-input-area input {
+        .modal-content {
+            padding: 2rem;
+            overflow-y: auto;
             flex: 1;
-            padding: 0.75rem 1rem;
-            border: 1px solid var(--border);
-            border-radius: 0.5rem;
-            font-size: 1rem;
-            font-family: inherit;
         }
 
-        .chat-input-area input:focus {
-            outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        /* Animations */
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(15px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
         }
 
-        /* Spinner */
+        @keyframes pulse {
+            0% {
+                transform: scale(0.95);
+                box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+            }
+
+            70% {
+                transform: scale(1);
+                box-shadow: 0 0 0 6px rgba(245, 158, 11, 0);
+            }
+
+            100% {
+                transform: scale(0.95);
+                box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+            }
+        }
+
         .spinner {
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255, 255, 255, 0.3);
+            width: 18px;
+            height: 18px;
+            border: 2.5px solid rgba(255, 255, 255, 0.3);
             border-radius: 50%;
             border-top-color: white;
-            animation: spin 1s ease-in-out infinite;
+            animation: spin 0.8s linear infinite;
             margin-right: 0.5rem;
             display: none;
         }
@@ -481,6 +812,222 @@
                 transform: rotate(360deg);
             }
         }
+
+        /* Entity Extraction Panel */
+        .extract-section {
+            margin-bottom: 3rem;
+            padding: 2rem;
+        }
+
+        .extract-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .extract-header h2 {
+            font-size: 1.25rem;
+            margin: 0;
+        }
+
+        .extract-controls {
+            display: flex;
+            gap: 1.5rem;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            margin-bottom: 1.5rem;
+        }
+
+        .extract-doc-select {
+            flex: 1;
+            min-width: 220px;
+        }
+
+        .extract-doc-select label,
+        .extract-types label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+
+        .extract-doc-select select {
+            width: 100%;
+            padding: 0.6rem 1rem;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border);
+            font-family: inherit;
+            font-size: 0.9rem;
+            color: var(--text-main);
+            background: white;
+            cursor: pointer;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .extract-doc-select select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .entity-checkboxes {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+        }
+
+        .entity-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.45rem 0.85rem;
+            border-radius: 99px;
+            border: 1px solid var(--border);
+            background: white;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            transition: all 0.2s;
+            user-select: none;
+        }
+
+        .entity-checkbox:hover {
+            border-color: var(--secondary);
+            background: #f8fafc;
+        }
+
+        .entity-checkbox.checked {
+            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+            border-color: #93c5fd;
+            color: var(--primary);
+        }
+
+        .entity-checkbox input[type="checkbox"] {
+            display: none;
+        }
+
+        .extract-actions {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .extract-results {
+            margin-top: 1.5rem;
+        }
+
+        .entity-table-group {
+            margin-bottom: 1.5rem;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .entity-table-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+        }
+
+        .entity-table-title h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .entity-count {
+            background: #eff6ff;
+            color: var(--primary);
+            padding: 0.15rem 0.6rem;
+            border-radius: 99px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .entity-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.88rem;
+            background: white;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+
+        .entity-table th {
+            background: #f8fafc;
+            color: var(--text-muted);
+            font-weight: 600;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            padding: 0.65rem 1rem;
+            text-align: left;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .entity-table td {
+            padding: 0.6rem 1rem;
+            border-bottom: 1px solid #f1f5f9;
+            color: var(--text-main);
+        }
+
+        .entity-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .entity-table tr:hover td {
+            background: #fafbfc;
+        }
+
+        .btn-csv {
+            background: #f0fdf4;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+            padding: 0.35rem 0.85rem;
+            border-radius: 99px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-csv:hover {
+            background: #dcfce7;
+            border-color: #86efac;
+        }
+
+        .extract-empty {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
     </style>
 </head>
 
@@ -489,49 +1036,129 @@
     <div class="container">
         <header>
             <h1>PDF Intelligenz System</h1>
-            <p class="subtitle">AI-gestützte Dokumentenanalyse und Datenextraktion</p>
+            <p class="subtitle">KI-gestützte Analyse, Extraktion & intelligente Suche in Dokumenten</p>
         </header>
 
         <!-- Upload Area -->
-        <div class="upload-card" id="drop-zone">
+        <div class="glass-card upload-card" id="drop-zone">
             <form id="upload-form">
-                <div class="upload-icon">📁</div>
-                <p style="margin-bottom: 1.5rem; color: var(--text-muted);">
+                <div class="upload-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="17 8 12 3 7 8" />
+                        <line x1="12" y1="3" x2="12" y2="15" />
+                    </svg>
+                </div>
+                <p style="margin-bottom: 1.5rem; color: var(--text-muted); font-size: 1.1rem;">
                     <label for="file-input" class="file-label">
                         <strong>Datei auswählen</strong>
                     </label>
                     oder hierher ziehen
                 </p>
                 <input type="file" id="file-input" name="file" accept=".pdf">
-                <div id="file-name" style="margin-bottom: 1rem; font-weight: 500; display:none;"></div>
+                <div id="file-name" style="margin-bottom: 1rem; font-weight: 500; display:none; color: var(--primary);">
+                </div>
 
                 <button type="submit" class="btn btn-primary" id="upload-btn" disabled>
                     <div class="spinner" id="upload-spinner"></div>
-                    <span id="upload-text">Hochladen</span>
+                    <span id="upload-text">Dokument analysieren</span>
                 </button>
             </form>
             <div id="status-box"></div>
         </div>
 
         <!-- RAG Chat Section -->
-        <div class="chat-section">
+        <div class="glass-card chat-section">
             <div class="chat-header">
-                <h2>KI-Assistent (Fragen zum Dokument)</h2>
+                <h2>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                    KI-Dokumentenassistent
+                </h2>
                 <div class="chat-controls">
-                    <select id="chat-doc-select">
-                        <option value="">Alle Dokumente durchsuchen</option>
-                    </select>
+                    <div class="multi-select-container" id="doc-multi-select">
+                        <div class="multi-select-trigger" id="ms-trigger">
+                            <span class="multi-select-placeholder" id="ms-placeholder">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                    <polyline points="14 2 14 8 20 8" />
+                                </svg>
+                                Alle Dokumente
+                            </span>
+                        </div>
+                        <div class="multi-select-dropdown" id="ms-dropdown"></div>
+                    </div>
                 </div>
             </div>
+
             <div class="chat-messages" id="chat-messages">
                 <div class="msg msg-ai">
-                    Hallo! Ich bin dein KI-Assistent. Wähle ein Dokument aus (oder suche in allen) und stelle mir eine Frage zu deinen hochgeladenen PDFs.
+                    Hallo! Ich bin dein intelligenter Assistent. Du kannst ein bestimmtes Dokument im Menü oben
+                    auswählen oder in allen gleichzeitig suchen. Was möchtest du wissen?
                 </div>
             </div>
+
             <form class="chat-input-area" id="chat-form">
-                <input type="text" id="chat-input" placeholder="Stelle eine Frage zu deinen Dokumenten..." autocomplete="off" required>
-                <button type="submit" class="btn btn-primary" style="margin:0; width:auto;">Senden</button>
+                <input type="text" id="chat-input"
+                    placeholder="Stelle eine Frage (z.B. 'Fasse die wichtigsten Punkte zusammen')..." autocomplete="off"
+                    required>
+                <button type="submit" class="btn btn-primary btn-send">Senden</button>
             </form>
+        </div>
+
+        <!-- Entity Extraction Section -->
+        <div class="glass-card extract-section" id="extract-section">
+            <div class="extract-header">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                    <line x1="3" y1="9" x2="21" y2="9" />
+                    <line x1="9" y1="21" x2="9" y2="9" />
+                </svg>
+                <h2>Daten extrahieren</h2>
+            </div>
+
+            <div class="extract-controls">
+                <div class="extract-doc-select">
+                    <label>Dokument</label>
+                    <select id="extract-doc-select">
+                        <option value="" disabled selected>Dokument auswählen...</option>
+                    </select>
+                </div>
+                <div class="extract-types">
+                    <label>Entitäten</label>
+                    <div class="entity-checkboxes" id="entity-checkboxes">
+                        <label class="entity-checkbox checked" data-type="personen">
+                            <input type="checkbox" value="personen" checked> 👤 Personen
+                        </label>
+                        <label class="entity-checkbox checked" data-type="firmen">
+                            <input type="checkbox" value="firmen" checked> 🏢 Firmen
+                        </label>
+                        <label class="entity-checkbox" data-type="betraege">
+                            <input type="checkbox" value="betraege"> 💰 Beträge
+                        </label>
+                        <label class="entity-checkbox" data-type="daten">
+                            <input type="checkbox" value="daten"> 📅 Daten
+                        </label>
+                        <label class="entity-checkbox" data-type="adressen">
+                            <input type="checkbox" value="adressen"> 📍 Adressen
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="extract-actions">
+                <button class="btn btn-primary" id="extract-btn" onclick="runExtraction()">
+                    <div class="spinner" id="extract-spinner"></div>
+                    <span id="extract-text">Extrahieren</span>
+                </button>
+            </div>
+
+            <div class="extract-results" id="extract-results"></div>
         </div>
 
         <!-- Documents List -->
@@ -539,7 +1166,8 @@
             <h2>Meine Dokumente</h2>
             <div id="docs-list" class="doc-list">
                 <!-- Items injected by JS -->
-                <p style="color: var(--text-muted); grid-column: 1/-1; text-align: center;">Lade Dokumente...</p>
+                <p style="color: var(--text-muted); grid-column: 1/-1; text-align: center;">Lade Dokumente aus der
+                    Datenbank...</p>
             </div>
         </div>
     </div>
@@ -548,11 +1176,17 @@
     <div class="modal-overlay" id="view-modal">
         <div class="modal">
             <div class="modal-header">
-                <div class="modal-title" id="modal-title">Dokument Details</div>
-                <button class="close-btn" onclick="closeModal()">×</button>
+                <div class="modal-title" id="modal-title">Dokument Analyse</div>
+                <button class="close-btn" onclick="closeModal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
             </div>
             <div class="modal-content">
-                <div id="modal-body" class="json-tree"></div>
+                <div id="modal-body"></div>
             </div>
         </div>
     </div>
@@ -560,6 +1194,8 @@
     <script>
         // State
         let isUploading = false;
+        let selectedDocIds = [];  // Cross-Document: Liste der ausgewählten Dokument-IDs
+        let availableDocs = [];   // Cache der verfügbaren Dokumente für Multi-Select
         const POLLING_INTERVAL = 5000;
 
         // Elements
@@ -635,7 +1271,7 @@
                 const data = await res.json();
 
                 if (data.success) {
-                    showStatus("Upload erfolgreich! Verarbeitung gestartet.", "success");
+                    showStatus("Upload erfolgreich! KI-Analyse gestartet.", "success");
                     fileInput.value = '';
                     fileNameDisplay.style.display = 'none';
                     uploadBtn.disabled = true;
@@ -654,7 +1290,7 @@
             isUploading = active;
             uploadBtn.disabled = active;
             uploadSpinner.style.display = active ? 'block' : 'none';
-            uploadText.textContent = active ? 'Wird hochgeladen...' : 'Hochladen';
+            uploadText.textContent = active ? 'Wird analysiert...' : 'Dokument analysieren';
         }
 
         function showStatus(msg, type) {
@@ -682,20 +1318,13 @@
         }
 
         function renderDocuments(docs) {
-            // Update Chat Dropdown
-            const chatSelect = document.getElementById('chat-doc-select');
-            const currentSelection = chatSelect.value;
-            chatSelect.innerHTML = '<option value="">Alle Dokumente durchsuchen</option>';
-            docs.filter(d => d.status === 'structured').forEach(d => {
-                const opt = document.createElement('option');
-                opt.value = d.doc_id;
-                opt.textContent = `Nur: ${d.filename}`;
-                chatSelect.appendChild(opt);
-            });
-            chatSelect.value = currentSelection; // Restore previous selection if possible
+            // Update Multi-Select Dropdown mit fertigen Dokumenten
+            availableDocs = docs.filter(d => d.status === 'structured');
+            renderMultiSelectDropdown();
+            updateExtractDocSelect();
 
             if (!docs.length) {
-                docsList.innerHTML = '<p style="color: var(--text-muted); grid-column: 1/-1; text-align: center;">Keine Dokumente gefunden.</p>';
+                docsList.innerHTML = '<p style="color: var(--text-muted); grid-column: 1/-1; text-align: center;">Bisher wurden keine Dokumente hochgeladen.</p>';
                 return;
             }
 
@@ -707,27 +1336,34 @@
                 let badgeClass = 'badge-processing';
 
                 if (isCompleted) {
-                    statusLabel = 'Fertig';
+                    statusLabel = 'KI-Analyse fertig';
                     badgeClass = 'badge-completed';
                 } else if (isFailed) {
-                    statusLabel = 'Fehler';
-                    badgeClass = 'status-error'; // Reusing existing error class
+                    statusLabel = 'Fehlgeschlagen';
+                    badgeClass = 'status-error';
                 }
 
                 const dateStr = new Date(doc.created_at).toLocaleString('de-DE');
                 const errorMsg = isFailed ? `title="${escapeHtml(doc.error_message || 'Unbekannter Fehler')}"` : '';
 
+                // Add category handling if available
+                const categoryHtml = doc.category ? 
+                    `<span class="badge-category">${escapeHtml(doc.category)}</span>` : '';
+
                 return `
-                <div class="doc-card" ${errorMsg}>
+                <div class="glass-card doc-card" ${errorMsg}>
                     <div>
-                        <div class="doc-title" title="${doc.filename}">${doc.filename}</div>
-                        <div class="doc-meta">${doc.page_count} Seiten • ${dateStr}</div>
+                        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.25rem;">
+                            <div class="doc-title" title="${doc.filename}" style="margin-bottom: 0;">${doc.filename}</div>
+                            ${categoryHtml}
+                        </div>
+                        <div class="doc-meta">${doc.page_count} Seiten • Hochgeladen: ${dateStr}</div>
                         <span class="doc-status ${badgeClass}">${statusLabel}</span>
-                        ${isFailed ? `<div style="color:var(--danger); font-size:0.75rem; margin-top:0.25rem;">${escapeHtml(doc.error_message || '')}</div>` : ''}
+                        ${isFailed ? `<div style="color:var(--danger); font-size:0.75rem; margin-top:0.5rem;">${escapeHtml(doc.error_message || '')}</div>` : ''}
                     </div>
                     <div class="doc-actions">
-                        <button class="btn btn-sm btn-outline" onclick="viewDocument('${doc.doc_id}', '${doc.filename}')" ${isFailed ? 'disabled' : ''}>Ansehen</button>
-                        <button class="btn btn-sm btn-danger" onclick="deleteDocument('${doc.doc_id}')">Löschen</button>
+                        <button class="btn btn-sm btn-outline" onclick="viewDocument('${doc.doc_id}', '${doc.filename}')" ${isFailed ? 'disabled' : ''}>Ergebnisse ansehen</button>
+                        <button class="btn btn-sm btn-outline" style="color:var(--danger); border-color:#fecaca;" onclick="deleteDocument('${doc.doc_id}')">Löschen</button>
                     </div>
                 </div>
             `;
@@ -736,7 +1372,7 @@
 
         // Actions
         async function deleteDocument(id) {
-            if (!confirm("Möchten Sie dieses Dokument wirklich löschen?")) return;
+            if (!confirm("Möchten Sie dieses Dokument wirklich permanent löschen?")) return;
             try {
                 const res = await fetch(`/document/${id}`, { method: 'DELETE' });
                 const data = await res.json();
@@ -748,54 +1384,43 @@
         }
 
         async function viewDocument(id, filename) {
-            // 1) Open modal immediately + show loading state
             modalTitle.textContent = filename;
-            modalBody.innerHTML = '<div style="text-align:center; padding:2rem;">Loading data...</div>';
+            modalBody.innerHTML = '<div style="text-align:center; padding:3rem;"><div class="spinner" style="display:inline-block; border-top-color:var(--primary); width:30px; height:30px;"></div><p style="margin-top:1rem; color:var(--text-muted);">Lade strukturierte Daten...</p></div>';
             openModal();
 
             try {
-                // 2) Fetch data from backend
                 const res = await fetch(`/document/${id}/structured`);
                 const data = await res.json();
 
                 if (!data.success) {
-                    modalBody.innerHTML = `<p style="color:var(--danger)">Error loading data: ${data.error}</p>`;
+                    modalBody.innerHTML = `<p style="color:var(--danger)">Fehler beim Laden: ${data.error}</p>`;
                     return;
                 }
 
-                // 3) New: Extract specific fields instead of JSON dump
                 const doc = data.data;
-
-                // Document summary (ideally comes from documents_collection)
                 const documentSummary = (doc.document_summary && doc.document_summary.trim().length > 0)
                     ? doc.document_summary
-                    : "Noch keine Dokument-Zusammenfassung verfügbar (wahrscheinlich noch in Bearbeitung).";
+                    : "Noch keine generelle Dokument-Zusammenfassung verfügbar.";
 
-                // Document-level keywords (optional; only if sent from backend)
                 const documentKeywords = Array.isArray(doc.document_keywords) ? doc.document_keywords : [];
-
-                // Handle pages robustly
                 const pages = Array.isArray(doc.pages) ? doc.pages : [];
 
-                // 4) New: Build HTML (readable, instead of raw JSON)
-                let html = `<div style="font-family: Inter, sans-serif; color: var(--text-main);">`;
+                let html = `<div style="font-family: 'Inter', sans-serif; color: var(--text-main);">`;
 
-                // A) Header: Document Summary
                 html += `
-                <section style="background:#eff6ff; border:1px solid #dbeafe; padding:1rem; border-radius:0.75rem;">
-                    <h3 style="margin:0 0 0.5rem 0; color: var(--primary);">Dokument-Zusammenfassung</h3>
-                    <p style="margin:0; color: var(--text-main); white-space: pre-wrap;">${escapeHtml(documentSummary)}</p>
+                <section style="background: rgba(239, 246, 255, 0.5); border: 1px solid #bfdbfe; padding: 1.5rem; border-radius: 1rem;">
+                    <h3 style="margin: 0 0 0.75rem 0; color: var(--primary); font-size: 1.15rem;">Executive Summary</h3>
+                    <p style="margin: 0; color: var(--text-main); white-space: pre-wrap; line-height: 1.7;">${escapeHtml(documentSummary)}</p>
                 </section>
                 `;
 
-                // B) Document Keywords (only if present)
                 if (documentKeywords.length > 0) {
-                    html += `<section style="margin-top:1.25rem;">
-                    <h3 style="margin:0 0 0.5rem 0;">Wichtige Begriffe</h3>
+                    html += `<section style="margin-top: 1.5rem;">
+                    <h3 style="margin: 0 0 1rem 0; font-size: 1.1rem;">Schlüsselbegriffe</h3>
                     <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">`;
 
                     documentKeywords.slice(0, 30).forEach((kw) => {
-                        html += `<span style="background:#e2e8f0; color:#0f172a; padding:0.25rem 0.6rem; border-radius:9999px; font-size:0.85rem;">
+                        html += `<span style="background: white; border: 1px solid var(--border); color: var(--text-muted); padding: 0.35rem 0.85rem; border-radius: 99px; font-size: 0.85rem; font-weight: 500; box-shadow: var(--shadow-sm);">
                         ${escapeHtml(String(kw))}
                         </span>`;
                     });
@@ -803,36 +1428,34 @@
                     html += `</div></section>`;
                 }
 
-                // C) Page Overview: page_summary per page
-                html += `<section style="margin-top:1.5rem;">
-                <h3 style="margin:0 0 0.75rem 0;">Seiten-Zusammenfassungen</h3>
+                html += `<section style="margin-top: 2rem;">
+                <h3 style="margin: 0 0 1rem 0; font-size: 1.1rem;">Detail-Ansicht (Pro Seite)</h3>
                 `;
 
                 if (pages.length === 0) {
-                    html += `<p style="margin:0; color: var(--text-muted);">Keine Seiten gefunden.</p>`;
+                    html += `<p style="margin:0; color: var(--text-muted);">Keine analysierten Seiten gefunden.</p>`;
                 } else {
                     pages.forEach((page) => {
                         const pageNum = page.page_num ?? "?";
                         const pageSummary = (page.page_summary && String(page.page_summary).trim().length > 0)
                             ? page.page_summary
-                            : "Noch keine Seiten-Zusammenfassung verfügbar.";
+                            : "Keine Daten.";
 
                         const pageKeywords = Array.isArray(page.keywords) ? page.keywords : [];
 
                         html += `
-                        <div style="background:white; border:1px solid var(--border); border-radius:0.75rem; padding:1rem; margin-bottom:0.75rem;">
-                            <div style="display:flex; justify-content:space-between; gap:1rem; align-items:center; margin-bottom:0.5rem;">
-                            <div style="font-weight:600;">Page ${escapeHtml(String(pageNum))}</div>
-                            <div style="font-size:0.85rem; color: var(--text-muted);">Keywords: ${pageKeywords.length}</div>
+                        <div style="background: white; border: 1px solid var(--border); border-radius: 1rem; padding: 1.5rem; margin-bottom: 1rem; box-shadow: var(--shadow-sm);">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid #f1f5f9;">
+                                <div style="font-weight: 600; color: var(--primary);">Seite ${escapeHtml(String(pageNum))}</div>
+                                <div style="font-size: 0.85rem; color: var(--text-muted); background: #f8fafc; padding: 0.2rem 0.6rem; border-radius: 6px;">${pageKeywords.length} Tags</div>
                             </div>
-
-                            <p style="margin:0 0 0.75rem 0; white-space: pre-wrap;">${escapeHtml(pageSummary)}</p>
+                            <p style="margin:0 0 1rem 0; white-space: pre-wrap; color: var(--text-muted);">${escapeHtml(pageSummary)}</p>
                         `;
 
                         if (pageKeywords.length > 0) {
-                            html += `<div style="display:flex; flex-wrap:wrap; gap:0.35rem;">`;
-                            pageKeywords.slice(0, 10).forEach((kw) => {
-                                html += `<span style="background:#f1f5f9; border:1px solid var(--border); padding:0.2rem 0.5rem; border-radius:0.5rem; font-size:0.8rem;">
+                            html += `<div style="display:flex; flex-wrap:wrap; gap:0.4rem;">`;
+                            pageKeywords.slice(0, 15).forEach((kw) => {
+                                html += `<span style="background: #f8fafc; color: var(--secondary); padding: 0.25rem 0.6rem; border-radius: 6px; font-size: 0.75rem;">
                             ${escapeHtml(String(kw))}
                             </span>`;
                             });
@@ -844,15 +1467,12 @@
                 }
 
                 html += `</section></div>`;
-
-                // 5) New: Insert finished HTML into modal instead of <pre> JSON
                 modalBody.innerHTML = html;
 
             } catch (e) {
                 modalBody.innerHTML = `<p style="color:var(--danger)">Netzwerkfehler.</p>`;
             }
         }
-
 
         function openModal() {
             modal.classList.add('open');
@@ -862,7 +1482,6 @@
             modal.classList.remove('open');
         }
 
-        // Close modal on outside click
         modal.addEventListener('click', e => {
             if (e.target === modal) closeModal();
         });
@@ -876,40 +1495,178 @@
                 .replaceAll("'", "&#039;");
         }
 
-        // Chat Form Logic
+        // ===== Multi-Select Chip Logic =====
+        const msTrigger = document.getElementById('ms-trigger');
+        const msDropdown = document.getElementById('ms-dropdown');
+        const msPlaceholder = document.getElementById('ms-placeholder');
+
+        msTrigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isOpen = msDropdown.classList.toggle('open');
+            msTrigger.classList.toggle('active', isOpen);
+        });
+
+        // Close dropdown on outside click
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('#doc-multi-select')) {
+                msDropdown.classList.remove('open');
+                msTrigger.classList.remove('active');
+            }
+        });
+
+        function toggleDocSelection(docId) {
+            const idx = selectedDocIds.indexOf(docId);
+            if (idx > -1) {
+                selectedDocIds.splice(idx, 1);
+            } else {
+                selectedDocIds.push(docId);
+            }
+            renderMultiSelectTrigger();
+            renderMultiSelectDropdown();
+        }
+
+        function removeDocChip(docId, event) {
+            event.stopPropagation();
+            selectedDocIds = selectedDocIds.filter(id => id !== docId);
+            renderMultiSelectTrigger();
+            renderMultiSelectDropdown();
+        }
+
+        function renderMultiSelectTrigger() {
+            // Clear existing chips (keep placeholder span)
+            const chips = msTrigger.querySelectorAll('.doc-chip');
+            chips.forEach(c => c.remove());
+
+            if (selectedDocIds.length === 0) {
+                msPlaceholder.style.display = 'flex';
+            } else {
+                msPlaceholder.style.display = 'none';
+                selectedDocIds.forEach(id => {
+                    const doc = availableDocs.find(d => d.doc_id === id);
+                    if (!doc) return;
+                    const chip = document.createElement('span');
+                    chip.className = 'doc-chip';
+                    chip.innerHTML = `📄 ${escapeHtml(doc.filename)}<button class="doc-chip-remove" onclick="removeDocChip('${id}', event)" title="Entfernen">✕</button>`;
+                    msTrigger.appendChild(chip);
+                });
+            }
+        }
+
+        function renderMultiSelectDropdown() {
+            if (availableDocs.length === 0) {
+                msDropdown.innerHTML = '<div class="ms-empty">Noch keine analysierten Dokumente vorhanden.</div>';
+                return;
+            }
+            msDropdown.innerHTML = availableDocs.map(d => {
+                const isSelected = selectedDocIds.includes(d.doc_id);
+                return `
+                    <div class="multi-select-option ${isSelected ? 'selected' : ''}" onclick="toggleDocSelection('${d.doc_id}')">
+                        <div class="ms-checkbox">
+                            <svg class="ms-checkbox-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        </div>
+                        <span class="ms-doc-name" title="${escapeHtml(d.filename)}">${escapeHtml(d.filename)}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // ===== Chat Form Logic =====
         const chatForm = document.getElementById('chat-form');
         const chatInput = document.getElementById('chat-input');
         const chatMessages = document.getElementById('chat-messages');
-        const chatSelect = document.getElementById('chat-doc-select');
 
-        function appendMessage(role, content, sources = []) {
+        function appendMessage(role, content, sources = [], followUps = []) {
             const msgDiv = document.createElement('div');
             msgDiv.className = `msg msg-${role}`;
-            
-            // Text content
-            const textDiv = document.createElement('div');
-            textDiv.style.whiteSpace = 'pre-wrap';
-            textDiv.textContent = content;
-            msgDiv.appendChild(textDiv);
-            
-            // Sources
-            if (sources && sources.length > 0) {
-                const sourcesDiv = document.createElement('div');
-                sourcesDiv.className = 'msg-sources';
-                sourcesDiv.innerHTML = '<strong style="color:var(--text-main);">Gefundene Quellen (Chunks):</strong><br>';
-                
-                sources.forEach((s, idx) => {
-                    const tag = document.createElement('span');
-                    tag.className = 'source-tag';
-                    const pageStr = s.page_num ? `S. ${s.page_num}` : 'Unbekkannt';
-                    const scoreStr = s.score ? Math.round(s.score * 100) + '%' : '';
-                    tag.textContent = `[${idx+1}] ${pageStr} Relevanz: ${scoreStr}`;
-                    tag.title = s.preview;
-                    sourcesDiv.appendChild(tag);
-                });
-                msgDiv.appendChild(sourcesDiv);
+
+            if (role === 'ai' && content === null) {
+                // Typing indicator
+                msgDiv.innerHTML = `
+                    <div class="typing-indicator">
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                    </div>
+                `;
+                msgDiv.id = 'typing-indicator';
+            } else {
+                const textDiv = document.createElement('div');
+                textDiv.style.whiteSpace = 'pre-wrap';
+                textDiv.textContent = content;
+                msgDiv.appendChild(textDiv);
+
+                if (sources && sources.length > 0) {
+                    const sourcesDiv = document.createElement('div');
+                    sourcesDiv.className = 'msg-sources';
+
+                    const sourceLabel = document.createElement('div');
+                    sourceLabel.style.width = '100%';
+                    sourceLabel.style.marginBottom = '0.5rem';
+                    sourceLabel.style.fontSize = '0.8rem';
+                    sourceLabel.innerHTML = '<strong>Auszüge aus Referenzen:</strong>';
+                    sourcesDiv.appendChild(sourceLabel);
+
+                    sources.forEach((s) => {
+                        const tag = document.createElement('span');
+                        tag.className = 'source-tag';
+                        const pageStr = s.page_num ? `S. ${s.page_num}` : '';
+                        const scoreStr = s.score ? Math.round(s.score * 100) + '%' : '';
+
+                        // Icon für das Tag
+                        tag.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> ${pageStr} (${scoreStr})`;
+                        tag.title = s.text || "Kein Text verfügbar"; // The actual chunk text on hover
+                        sourcesDiv.appendChild(tag);
+                    });
+                    msgDiv.appendChild(sourcesDiv);
+                }
+
+                if (followUps && followUps.length > 0) {
+                    const followUpsDiv = document.createElement('div');
+                    followUpsDiv.style.marginTop = '1rem';
+                    followUpsDiv.style.display = 'flex';
+                    followUpsDiv.style.flexDirection = 'column';
+                    followUpsDiv.style.gap = '0.5rem';
+
+                    const followLabel = document.createElement('div');
+                    followLabel.style.fontSize = '0.8rem';
+                    followLabel.style.color = 'var(--text-muted)';
+                    followLabel.innerHTML = '<strong>Vorgeschlagene Folgefragen:</strong>';
+                    followUpsDiv.appendChild(followLabel);
+
+                    const btnContainer = document.createElement('div');
+                    btnContainer.style.display = 'flex';
+                    btnContainer.style.flexWrap = 'wrap';
+                    btnContainer.style.gap = '0.5rem';
+
+                    followUps.forEach(q => {
+                        const btn = document.createElement('button');
+                        btn.className = 'btn btn-outline btn-sm';
+                        btn.style.borderRadius = '99px';
+                        btn.style.fontSize = '0.8rem';
+                        btn.style.background = '#f8fafc';
+                        btn.style.color = 'var(--primary)';
+                        btn.style.borderColor = '#bfdbfe';
+                        btn.style.textAlign = 'left';
+                        btn.textContent = "💡 " + q;
+
+                        btn.onclick = () => {
+                            chatInput.value = q;
+                            // Trigger submit by a direct call or dispatch event
+                            const ev = new Event('submit', { cancelable: true });
+                            chatForm.dispatchEvent(ev);
+                        };
+
+                        btn.onmouseenter = () => { btn.style.background = '#eff6ff'; btn.style.borderColor = 'var(--primary)'; };
+                        btn.onmouseleave = () => { btn.style.background = '#f8fafc'; btn.style.borderColor = '#bfdbfe'; };
+
+                        btnContainer.appendChild(btn);
+                    });
+
+                    followUpsDiv.appendChild(btnContainer);
+                    msgDiv.appendChild(followUpsDiv);
+                }
             }
-            
+
             chatMessages.appendChild(msgDiv);
             chatMessages.scrollTop = chatMessages.scrollHeight;
             return msgDiv;
@@ -918,29 +1675,30 @@
         chatForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const question = chatInput.value.trim();
-            if(!question) return;
-            
-            const docId = chatSelect.value;
-            
+            if (!question) return;
+
+            // Cross-Document: Sende doc_ids Array (leer = alle Dokumente)
+            const docIds = selectedDocIds.length > 0 ? [...selectedDocIds] : null;
+
             // User message ui
             appendMessage('user', question);
             chatInput.value = '';
-            
+
             // Loading message ui
-            const loadingMsg = appendMessage('ai', 'Ich durchsuche die Dokumente und überlege... ⏳');
-            
+            const loadingMsg = appendMessage('ai', null);
+
             try {
                 const res = await fetch('/ask', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ question: question, doc_id: docId || null })
+                    body: JSON.stringify({ question: question, doc_ids: docIds })
                 });
                 const data = await res.json();
-                
+
                 loadingMsg.remove();
-                
-                if(data.success) {
-                    appendMessage('ai', data.data.answer, data.data.sources);
+
+                if (data.success) {
+                    appendMessage('ai', data.data.answer, data.data.sources, data.data.follow_ups);
                 } else {
                     appendMessage('ai', `Fehler: ${data.error}`);
                 }
@@ -949,6 +1707,157 @@
                 appendMessage('ai', 'Lokaler Netzwerkfehler beim Abrufen der Antwort.');
             }
         });
+
+        // ===== Entity Extraction Logic =====
+        const entityCheckboxes = document.querySelectorAll('.entity-checkbox');
+        entityCheckboxes.forEach(label => {
+            label.addEventListener('click', (e) => {
+                if (e.target.tagName === 'INPUT') return; // Let native checkbox handle
+                const cb = label.querySelector('input[type="checkbox"]');
+                cb.checked = !cb.checked;
+                label.classList.toggle('checked', cb.checked);
+            });
+            // Also handle direct checkbox clicks
+            const cb = label.querySelector('input[type="checkbox"]');
+            cb.addEventListener('change', () => {
+                label.classList.toggle('checked', cb.checked);
+            });
+        });
+
+        function updateExtractDocSelect() {
+            const sel = document.getElementById('extract-doc-select');
+            const currentVal = sel.value;
+            sel.innerHTML = '<option value="" disabled>Dokument auswählen...</option>';
+            availableDocs.forEach(d => {
+                const opt = document.createElement('option');
+                opt.value = d.doc_id;
+                opt.textContent = `📄 ${d.filename}`;
+                sel.appendChild(opt);
+            });
+            if (currentVal) sel.value = currentVal;
+        }
+
+        async function runExtraction() {
+            const docId = document.getElementById('extract-doc-select').value;
+            if (!docId) {
+                alert('Bitte wähle zuerst ein Dokument aus.');
+                return;
+            }
+
+            const checked = document.querySelectorAll('#entity-checkboxes input:checked');
+            const entityTypes = Array.from(checked).map(cb => cb.value);
+            if (entityTypes.length === 0) {
+                alert('Bitte wähle mindestens einen Entitätstyp aus.');
+                return;
+            }
+
+            const btn = document.getElementById('extract-btn');
+            const spinner = document.getElementById('extract-spinner');
+            const textEl = document.getElementById('extract-text');
+            const resultsDiv = document.getElementById('extract-results');
+
+            btn.disabled = true;
+            spinner.style.display = 'block';
+            textEl.textContent = 'Extrahiere...';
+            resultsDiv.innerHTML = '<div class="extract-empty"><div class="typing-indicator" style="justify-content:center;"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div><p style="margin-top:0.75rem;">KI analysiert das Dokument...</p></div>';
+
+            try {
+                const res = await fetch('/extract', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ doc_id: docId, entity_types: entityTypes })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    renderExtractionResults(data.data.entities);
+                } else {
+                    resultsDiv.innerHTML = `<div class="extract-empty" style="color:var(--danger);">Fehler: ${escapeHtml(data.error)}</div>`;
+                }
+            } catch (err) {
+                resultsDiv.innerHTML = '<div class="extract-empty" style="color:var(--danger);">Netzwerkfehler beim Extrahieren.</div>';
+            } finally {
+                btn.disabled = false;
+                spinner.style.display = 'none';
+                textEl.textContent = 'Extrahieren';
+            }
+        }
+
+        const entityLabels = {
+            personen: '👤 Personen',
+            firmen: '🏢 Firmen',
+            betraege: '💰 Beträge',
+            daten: '📅 Daten',
+            adressen: '📍 Adressen'
+        };
+
+        function renderExtractionResults(entities) {
+            const resultsDiv = document.getElementById('extract-results');
+            let html = '';
+
+            for (const [type, rows] of Object.entries(entities)) {
+                if (!Array.isArray(rows)) continue;
+                const label = entityLabels[type] || type;
+
+                html += `<div class="entity-table-group">`;
+                html += `<div class="entity-table-title">`;
+                html += `<h3>${label} <span class="entity-count">${rows.length}</span></h3>`;
+
+                if (rows.length > 0) {
+                    html += `<button class="btn-csv" onclick="downloadCSV('${type}')">⬇ CSV</button>`;
+                }
+                html += `</div>`;
+
+                if (rows.length === 0) {
+                    html += `<p style="color:var(--text-muted); font-size:0.85rem;">Keine ${label} im Dokument gefunden.</p>`;
+                } else {
+                    // Get column headers from first row
+                    const columns = Object.keys(rows[0]);
+                    html += `<table class="entity-table">`;
+                    html += `<thead><tr>${columns.map(c => `<th>${escapeHtml(c)}</th>`).join('')}</tr></thead>`;
+                    html += `<tbody>`;
+                    rows.forEach(row => {
+                        html += `<tr>${columns.map(c => `<td>${escapeHtml(String(row[c] ?? ''))}</td>`).join('')}</tr>`;
+                    });
+                    html += `</tbody></table>`;
+                }
+                html += `</div>`;
+            }
+
+            if (!html) {
+                html = '<div class="extract-empty">Keine Entitäten gefunden.</div>';
+            }
+
+            resultsDiv.innerHTML = html;
+            // Store data for CSV downloads
+            resultsDiv._entityData = entities;
+        }
+
+        function downloadCSV(type) {
+            const resultsDiv = document.getElementById('extract-results');
+            const data = resultsDiv._entityData;
+            if (!data || !data[type] || !data[type].length) return;
+
+            const rows = data[type];
+            const columns = Object.keys(rows[0]);
+
+            // Build CSV content
+            const csvLines = [];
+            csvLines.push(columns.map(c => `"${c}"`).join(';'));
+            rows.forEach(row => {
+                csvLines.push(columns.map(c => `"${String(row[c] ?? '').replace(/"/g, '""')}"`).join(';'));
+            });
+
+            const csvContent = '\uFEFF' + csvLines.join('\n'); // BOM for Excel UTF-8
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${type}_extract.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
 
     </script>
 </body>

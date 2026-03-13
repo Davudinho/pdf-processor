@@ -329,16 +329,12 @@ RULES:
             logger.warning(f"  Failed: {failed_count} pages")
         logger.info("="*70)
     
-    def generate_document_summary(self, page_summaries: List[str]) -> str:
+    def generate_document_summary(self, page_summaries: List[str]) -> dict:
         """
-        Generate a concise executive summary for the entire document based on page summaries.
+        Generate a concise executive summary and automatically categorize the entire document based on page summaries.
         """
         if not page_summaries:
-            return ""
-            
-        # If only one page, just return that page's summary
-        if len(page_summaries) == 1:
-            return page_summaries[0]
+            return {"summary": "", "category": "Sonstiges"}
 
         # Combine page summaries into a context
         context = "\n\n".join([f"Page {i+1}: {summary}" for i, summary in enumerate(page_summaries)])
@@ -349,36 +345,59 @@ RULES:
 
         system_prompt = """
         You are an expert executive assistant. 
-        Create a coherent, concise executive summary (100-200 words) of the ENTIRE document based on the provided page summaries.
+        Create a coherent, concise executive summary (100-200 words) of the ENTIRE document based on the provided page summaries AND assign it a category.
+        
+        REQUIRED OUTPUT FORMAT (JSON):
+        {
+          "summary": "The executive summary text...",
+          "category": "One of the allowed categories"
+        }
+        
+        ALLOWED CATEGORIES:
+        - "Rechnung" (Invoice, receipts)
+        - "Vertrag" (Contracts, agreements)
+        - "Lebenslauf" (CVs, resumes, applicant profiles)
+        - "Bericht" (Reports, analytics, summaries)
+        - "Formular" (Forms, applications)
+        - "Präsentation" (Slides, pitches)
+        - "Sonstiges" (Other/Unknown)
         
         GUIDELINES:
         1. Synthesize the information, do not just list what is on each page.
         2. Identify the core purpose, main results, and key dates/entities.
-        3. Write in the same language as the document (German or English).
+        3. Write the summary in the same language as the document (German or English).
         4. Focus on the "Big Picture".
         """
 
         try:
-            logger.info(f"Generating document summary from {len(page_summaries)} pages...")
+            logger.info(f"Generating document summary and category from {len(page_summaries)} pages...")
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": f"Here are the summaries of the document pages:\n\n{context}"}
                 ],
+                response_format={"type": "json_object"},
                 temperature=0.3,
                 max_tokens=500
             )
-            return response.choices[0].message.content.strip()
+            content = response.choices[0].message.content.strip()
+            import json
+            result = json.loads(content)
+            return {
+                "summary": result.get("summary", ""),
+                "category": result.get("category", "Sonstiges")
+            }
         except Exception as e:
-            logger.error(f"Failed to generate document summary: {e}")
+            logger.error(f"Failed to generate document summary and category: {e}")
             # Fallback to simple concatenation
-            return f"Document with {len(page_summaries)} pages. " + page_summaries[0]
+            summary_text = f"Document with {len(page_summaries)} pages. " + page_summaries[0]
+            return {"summary": summary_text, "category": "Sonstiges"}
 
     def _update_document_metadata(self, db_manager: MongoDBManager, doc_id: str, 
                                    page_summaries: List[str], all_keywords: List[str]):
         """
-        Update document-level metadata with aggregated summaries and keywords.
+        Update document-level metadata with aggregated summaries, keywords and category.
         
         :param db_manager: Database manager instance
         :param doc_id: Document ID
@@ -386,20 +405,23 @@ RULES:
         :param all_keywords: List of all keywords from all pages
         """
         try:
-            # Create document summary using AI
-            doc_summary = self.generate_document_summary(page_summaries)
+            # Create document summary and category using AI
+            doc_info = self.generate_document_summary(page_summaries)
+            doc_summary = doc_info.get("summary", "")
+            doc_category = doc_info.get("category", "Sonstiges")
             
             # Deduplicate and limit keywords
             unique_keywords = list(dict.fromkeys(all_keywords))[:30]  # Top 30 unique keywords
             
             # Update documents collection
             if db_manager.documents_collection is not None:
-                logger.info(f"Updating document {doc_id} with {len(unique_keywords)} keywords and summary length {len(doc_summary)}")
+                logger.info(f"Updating document {doc_id} with category {doc_category}, {len(unique_keywords)} keywords and summary length {len(doc_summary)}")
                 db_manager.documents_collection.update_one(
                     {"doc_id": doc_id},
                     {
                         "$set": {
                             "document_summary": doc_summary,
+                            "category": doc_category,
                             "keywords": unique_keywords,
                             "status": "structured",
                             "updated_at": datetime.utcnow()
@@ -508,7 +530,7 @@ RULES:
             logger.error(f"create_embeddings_batch: Fehler: {e}")
             return []
 
-    def ask_question(self, question: str, context_chunks: List[str]) -> str:
+    def ask_question(self, question: str, context_chunks: List[str]) -> dict:
         """
         Beantwortet eine Frage basierend auf den übergebenen Text-Chunks (RAG).
         
@@ -535,6 +557,13 @@ REGELN:
 3. Erfinde niemals Fakten (keine Halluzinationen).
 4. Antworte in der Sprache, in der die Frage gestellt wurde (meistens Deutsch).
 5. Halte deine Antwort präzise und auf den Punkt.
+
+ZUSATZAUFGABE:
+Gib deine Antwort IMMER als wohlgeformtes JSON zurück mit folgendem Schema:
+{
+  "answer": "Deine Antwort auf die Frage based auf dem Kontext",
+  "follow_ups": ["Sinnvolle Folgefrage 1", "Sinnvolle Folgefrage 2", "Sinnvolle Folgefrage 3"]
+}
 """
         user_prompt = f"""Hier ist der relevante Kontext aus dem Dokument:
 
@@ -550,14 +579,106 @@ Frage: {question}"""
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
+                response_format={"type": "json_object"},
                 temperature=0.2, # Niedrige Temperatur für fokussierte, faktenbasierte Antworten
                 max_tokens=800
             )
-            return response.choices[0].message.content.strip()
+            content = response.choices[0].message.content.strip()
+            import json
+            result = json.loads(content)
+            return {
+                "answer": result.get("answer", "Keine Antwort generiert."),
+                "follow_ups": result.get("follow_ups", [])
+            }
             
         except Exception as e:
             logger.error(f"Fehler bei ask_question: {e}")
-            return f"Es gab einen Fehler bei der KI-Verarbeitung: {str(e)}"
+            return {
+                "answer": f"Es gab einen Fehler bei der KI-Verarbeitung: {str(e)}",
+                "follow_ups": []
+            }
+
+    def extract_entities(self, text: str, entity_types: List[str]) -> dict:
+        """
+        Extrahiert benannte Entitäten aus einem Dokumenttext.
+        
+        Nutzt NICHT RAG, sondern den kompletten Text, da wir ALLE Entitäten finden wollen.
+        
+        :param text: Kompletter Dokumenttext (alle Seiten zusammen)
+        :param entity_types: Liste der gewünschten Entity-Typen 
+                            (z.B. ["personen", "firmen", "betraege"])
+        :return: Dict mit Entity-Typ als Key und Liste von Rows als Value
+        """
+        if not self.client:
+            logger.error("extract_entities: OpenAI Client nicht initialisiert.")
+            return {"error": "KI-Service ist nicht verfügbar."}
+
+        if not text or not text.strip():
+            return {"error": "Kein Text zum Extrahieren vorhanden."}
+
+        # Map entity types to German labels for the prompt
+        type_descriptions = {
+            "personen": "Personen (Name, Rolle/Titel, Kontext)",
+            "firmen": "Firmen/Organisationen (Name, Typ, Kontext)",
+            "daten": "Daten/Datumsangaben (Datum, Typ/Bezeichnung, Kontext)",
+            "betraege": "Geldbeträge (Betrag, Währung, Kontext/Zweck)",
+            "adressen": "Adressen (Straße, PLZ, Ort, Land)"
+        }
+
+        requested = {k: v for k, v in type_descriptions.items() if k in entity_types}
+        if not requested:
+            return {"error": "Keine gültigen Entity-Typen angegeben."}
+
+        # Truncate very long texts (keep beginning + end)
+        max_chars = 24000
+        if len(text) > max_chars:
+            half = max_chars // 2
+            text = text[:half] + f"\n\n[...{len(text) - max_chars} Zeichen gekürzt...]\n\n" + text[-half:]
+
+        # Build the prompt dynamically based on requested types
+        type_schema_parts = []
+        for key, desc in requested.items():
+            type_schema_parts.append(f'  "{key}": [  // {desc}\n    {{"column1": "value", "column2": "value", ...}}\n  ]')
+
+        schema_str = ",\n".join(type_schema_parts)
+
+        system_prompt = f"""Du bist ein Experte für die Extraktion von strukturierten Daten aus Dokumenten.
+Analysiere den folgenden Dokumenttext und extrahiere ALLE vorkommenden Entitäten der angeforderten Typen.
+
+Gib deine Antwort als JSON zurück mit folgendem Schema:
+{{
+{schema_str}
+}}
+
+REGELN:
+1. Extrahiere JEDE Entität die im Text vorkommt, nicht nur die offensichtlichen.
+2. Jeder Eintrag soll ein Dict mit beschreibenden Keys sein.
+3. Wenn ein Typ keine Treffer hat, gib eine leere Liste [] zurück.
+4. Präzision ist wichtiger als Vollständigkeit – keine erfundenen Daten.
+5. Beträge immer als Zahl formatieren (z.B. 1234.56), Währung separat.
+6. Daten im Format TT.MM.JJJJ angeben.
+7. Antworte NUR mit dem JSON, keine Erklärungen."""
+
+        try:
+            logger.info(f"Entity Extraction: {len(text)} Zeichen, Typen: {list(requested.keys())}")
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Dokumenttext:\n\n{text}"}
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.1,
+                max_tokens=3000
+            )
+            content = response.choices[0].message.content.strip()
+            result = json.loads(content)
+            logger.info(f"Entity Extraction erfolgreich: {', '.join(f'{k}={len(v)}' for k, v in result.items() if isinstance(v, list))}")
+            return result
+
+        except Exception as e:
+            logger.error(f"Fehler bei extract_entities: {e}")
+            return {"error": f"KI-Verarbeitung fehlgeschlagen: {str(e)}"}
 
 if __name__ == "__main__":
     # Test script

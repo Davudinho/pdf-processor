@@ -1,6 +1,6 @@
 import logging
 import uuid
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
@@ -10,6 +10,7 @@ from qdrant_client.models import (
     Filter,
     FieldCondition,
     MatchValue,
+    MatchAny,
 )
 
 logger = logging.getLogger(__name__)
@@ -160,7 +161,7 @@ class QdrantManager:
         self,
         query_embedding: List[float],
         limit: int = 5,
-        doc_id: Optional[str] = None
+        doc_ids: Optional[Union[str, List[str]]] = None
     ) -> List[Dict[str, Any]]:
         """
         Findet die ähnlichsten Chunks zu einem Query-Embedding.
@@ -172,7 +173,7 @@ class QdrantManager:
 
         :param query_embedding: Embedding der Benutzer-Frage (1536 Floats)
         :param limit:           Wie viele Ergebnisse zurückgeben (Standard: 5)
-        :param doc_id:          Optional: Suche nur in einem bestimmten Dokument
+        :param doc_ids:         Optional: Suche in einem oder mehreren bestimmten Dokumenten (ID oder Liste von IDs)
         :return: Liste der ähnlichsten Chunks mit Score und Metadaten
         """
         if not self.client:
@@ -184,14 +185,16 @@ class QdrantManager:
             return []
 
         try:
-            # Filter: Optional auf ein bestimmtes Dokument einschränken
+            # Filter: Optional auf Listen von Dokumenten einschränken
             search_filter = None
-            if doc_id:
+            if doc_ids:
+                if isinstance(doc_ids, str):
+                    doc_ids = [doc_ids]
                 search_filter = Filter(
                     must=[
                         FieldCondition(
                             key="doc_id",
-                            match=MatchValue(value=doc_id)
+                            match=MatchAny(any=doc_ids)
                         )
                     ]
                 )
@@ -215,7 +218,7 @@ class QdrantManager:
                     "chunk_index": point.payload.get("chunk_index", 0),
                 })
 
-            logger.info(f"search_similar: {len(hits)} Treffer gefunden (doc_id={doc_id or 'alle'})")
+            logger.info(f"search_similar: {len(hits)} Treffer gefunden (doc_ids={doc_ids or 'alle'})")
             return hits
 
         except Exception as e:
