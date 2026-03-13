@@ -6,10 +6,37 @@ import logging
 import gridfs
 from bson import ObjectId
 from typing import List, Dict, Optional, Any, BinaryIO
+import functools
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def require_db(*collections, fallback=None):
+    """
+    Decorator that checks whether the required MongoDB collections
+    are initialized before executing the decorated method.
+
+    Usage:
+        @require_db('documents_collection', 'pages_collection', fallback=[])
+        def some_method(self, ...):
+            ...
+
+    If any listed collection is None on the instance, the method returns
+    `fallback` immediately and logs an error – no boilerplate inside each method.
+    """
+    def decorator(fn):
+        @functools.wraps(fn)
+        def wrapper(self, *args, **kwargs):
+            for col in collections:
+                if getattr(self, col, None) is None:
+                    logger.error(f"{fn.__name__}: '{col}' not initialized – DB connected?")
+                    return fallback
+            return fn(self, *args, **kwargs)
+        return wrapper
+    return decorator
+
 
 class MongoDBManager:
     def __init__(self, uri: str = "mongodb://localhost:27017/", db_name: str = "pdf_intelligence_db"):
@@ -98,24 +125,21 @@ class MongoDBManager:
                 logger.error(f"Unexpected error connecting to MongoDB: {e}")
                 raise # Re-raise unexpected connection errors
 
+    @require_db('documents_collection', 'pages_collection', fallback=None)
     def save_pdf_with_pages(self, pdf_path: str, filename: str, pages_data: List[Dict[str, Any]]) -> Optional[str]:
         """
         Save PDF file to GridFS and page data to collections.
-        
+
         New architecture:
         1. Store original PDF in GridFS
         2. Create document-level metadata in documents collection
         3. Create page-level data in pages collection
-        
+
         :param pdf_path: Path to the PDF file on disk
         :param filename: Original filename
         :param pages_data: List of dictionaries containing page extraction data
         :return: doc_id (UUID string) or None if failed
         """
-        if self.pages_collection is None or self.documents_collection is None:
-            logger.error("Database not connected")
-            return None
-
         doc_id = str(uuid.uuid4())
         created_at = datetime.utcnow()
         
@@ -179,21 +203,18 @@ class MongoDBManager:
             logger.error(f"Unexpected error saving document: {e}")
             return None
     
+    @require_db('documents_collection', 'pages_collection', fallback=None)
     def save_pdf_pages(self, filename: str, pages_data: List[Dict[str, Any]]) -> Optional[str]:
         """
         Legacy method for backward compatibility.
         Note: This does NOT save the original PDF file.
         Use save_pdf_with_pages() instead for full functionality.
-        
+
         :param filename: Original filename
         :param pages_data: List of dictionaries containing page extraction data
         :return: doc_id (UUID string) or None if failed
         """
         logger.warning("Using legacy save_pdf_pages method - PDF file will not be stored")
-        if self.pages_collection is None or self.documents_collection is None:
-            logger.error("Database not connected")
-            return None
-
         doc_id = str(uuid.uuid4())
         created_at = datetime.utcnow()
         
@@ -279,14 +300,12 @@ class MongoDBManager:
             logger.error(f"Error deleting PDF from GridFS: {e}")
             return False
 
+    @require_db('documents_collection', 'pages_collection', fallback=None)
     def get_document_status(self, doc_id: str) -> Optional[Dict[str, Any]]:
         """
         Get the overall status of a document.
         Now uses the documents collection for metadata.
         """
-        if self.documents_collection is None or self.pages_collection is None:
-            return None
-
         try:
             # Get document metadata
             doc = self.documents_collection.find_one({"doc_id": doc_id})
@@ -309,14 +328,12 @@ class MongoDBManager:
             logger.error(f"Error getting status for {doc_id}: {e}")
             return None
 
+    @require_db('pages_collection', fallback=[])
     def get_raw_text(self, doc_id: str, page_num: int = None) -> List[Dict[str, Any]]:
         """
         Retrieve raw text for a document or specific page.
         Uses pages collection.
         """
-        if self.pages_collection is None:
-            return []
-
         query = {"doc_id": doc_id}
         if page_num is not None:
             query["page_num"] = page_num
@@ -329,13 +346,14 @@ class MongoDBManager:
             logger.error(f"Error retrieving raw text for {doc_id}: {e}")
             return []
 
-    def update_page_data(self, doc_id: str, page_num: int, 
+    @require_db('pages_collection', fallback=False)
+    def update_page_data(self, doc_id: str, page_num: int,
                          structured_data: dict = None,
-                         page_summary: str = None, 
+                         page_summary: str = None,
                          keywords: List[str] = None) -> bool:
         """
         Update a specific page with AI-generated data.
-        
+
         :param doc_id: Document ID
         :param page_num: Page number
         :param structured_data: Structured extraction (sections, tables, etc.)
@@ -343,9 +361,6 @@ class MongoDBManager:
         :param keywords: List of keywords extracted from the page
         :return: True if updated successfully
         """
-        if self.pages_collection is None:
-            return False
-
         try:
             update_fields = {
                 "status": "structured",
@@ -375,14 +390,12 @@ class MongoDBManager:
         """
         return self.update_page_data(doc_id, page_num, structured_data=structured_data)
 
+    @require_db('documents_collection', 'pages_collection', fallback=[])
     def get_all_documents(self) -> List[Dict[str, Any]]:
         """
         Get a list of all documents with metadata.
         Now uses the documents collection directly.
         """
-        if self.documents_collection is None or self.pages_collection is None:
-            return []
-
         try:
             # Get all documents
             documents = list(self.documents_collection.find().sort("created_at", -1))
@@ -412,13 +425,11 @@ class MongoDBManager:
             logger.error(f"Error listing documents: {e}")
             return []
 
+    @require_db('documents_collection', 'pages_collection', fallback=None)
     def get_document_details(self, doc_id: str) -> Optional[Dict[str, Any]]:
         """
         Get full details for a document including metadata and all pages.
         """
-        if self.documents_collection is None or self.pages_collection is None:
-            return None
-
         try:
             # Get document metadata
             doc = self.documents_collection.find_one({"doc_id": doc_id})
@@ -503,14 +514,12 @@ class MongoDBManager:
             logger.error(f"Error creating document structure for {doc_id}: {e}")
             return None
 
+    @require_db('documents_collection', 'pages_collection', fallback=False)
     def delete_document(self, doc_id: str) -> bool:
         """
         Delete a document and all associated data.
         Deletes from: documents collection, pages collection, and GridFS.
         """
-        if self.documents_collection is None or self.pages_collection is None:
-            return False
-
         try:
             # Get document to find PDF file ID
             doc = self.documents_collection.find_one({"doc_id": doc_id})
@@ -534,18 +543,16 @@ class MongoDBManager:
             logger.error(f"Error deleting document {doc_id}: {e}")
             return False
     
+    @require_db('pages_collection', 'documents_collection', fallback=[])
     def search_documents(self, query: str, limit: int = 20) -> List[Dict[str, Any]]:
         """
         Search documents by keyword using MongoDB text index.
         Searches through raw_text and keywords fields in pages collection.
-        
+
         :param query: Search query string
         :param limit: Maximum number of results to return
         :return: List of matching pages with document metadata
         """
-        if self.pages_collection is None or self.documents_collection is None:
-            return []
-        
         try:
             # Perform text search on pages
             search_results = list(
