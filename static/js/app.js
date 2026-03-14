@@ -105,8 +105,18 @@ dropZone.addEventListener('drop', e => {
     }
 });
 
+const MAX_FILE_SIZE_MB = 50;
+
 function updateFileState(file) {
-    fileNameDisplay.textContent = `Ausgewählt: ${file.name}`;
+    // Validate file size before allowing upload
+    if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+        showStatus(`Datei zu groß: ${(file.size / 1024 / 1024).toFixed(1)} MB. Maximum: ${MAX_FILE_SIZE_MB} MB.`, 'error');
+        fileInput.value = '';
+        fileNameDisplay.style.display = 'none';
+        uploadBtn.disabled = true;
+        return;
+    }
+    fileNameDisplay.textContent = `Ausgewählt: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB)`;
     fileNameDisplay.style.display = 'block';
     uploadBtn.disabled = false;
     hideStatus();
@@ -153,7 +163,7 @@ uploadForm.addEventListener('submit', async (e) => {
 
 async function loadDocuments() {
     try {
-        const res = await fetch('/documents');
+        const res = await fetch('/documents?page=1&limit=50');
         const json = await res.json();
         if (json.success) {
             renderDocuments(json.data);

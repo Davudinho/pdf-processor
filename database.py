@@ -390,15 +390,49 @@ class MongoDBManager:
         """
         return self.update_page_data(doc_id, page_num, structured_data=structured_data)
 
-    @require_db('documents_collection', 'pages_collection', fallback=[])
-    def get_all_documents(self) -> List[Dict[str, Any]]:
+    @require_db('documents_collection', fallback=0)
+    def get_document_count(self) -> int:
         """
-        Get a list of all documents with metadata.
-        Now uses the documents collection directly.
+        Return the total number of documents in the collection.
+        Used for pagination metadata.
         """
         try:
-            # Get all documents
-            documents = list(self.documents_collection.find().sort("created_at", -1))
+            return self.documents_collection.count_documents({})
+        except Exception as e:
+            logger.error(f"Error counting documents: {e}")
+            return 0
+
+    @require_db('documents_collection', fallback=[])
+    def get_unique_categories(self) -> List[str]:
+        """
+        Get a list of all distinct document categories currently in the database.
+        Used to guide the AI's auto-categorization.
+        """
+        try:
+            categories = self.documents_collection.distinct("category")
+            # Filter out empty categories and the generic "Sonstiges" to encourage specific naming
+            valid_categories = [c.strip() for c in categories if c and c.strip() and c != "Sonstiges"]
+            return sorted(list(set(valid_categories)))
+        except Exception as e:
+            logger.error(f"Error getting unique categories: {e}")
+            return []
+
+    @require_db('documents_collection', 'pages_collection', fallback=[])
+    def get_all_documents(self, limit: int = 50, skip: int = 0) -> List[Dict[str, Any]]:
+        """
+        Get a paginated list of documents with metadata.
+
+        :param limit: Maximum number of documents to return (default 50)
+        :param skip: Number of documents to skip (offset for pagination)
+        """
+        try:
+            # Get paginated documents, newest first
+            documents = list(
+                self.documents_collection.find()
+                .sort("created_at", -1)
+                .skip(skip)
+                .limit(limit)
+            )
             
             # Enhance with processing status
             for doc in documents:
@@ -417,8 +451,7 @@ class MongoDBManager:
                 doc["page_count"] = total_pages
                 
                 # Remove MongoDB internal _id
-                if "_id" in doc:
-                    del doc["_id"]
+                self._serialize_doc(doc)
                 
             return documents
         except Exception as e:
@@ -441,11 +474,9 @@ class MongoDBManager:
             pages = list(cursor)
             
             # Remove MongoDB _id from all records
-            if "_id" in doc:
-                del doc["_id"]
+            self._serialize_doc(doc)
             for page in pages:
-                if "_id" in page:
-                    del page["_id"]
+                self._serialize_doc(page)
             
             # Combine document metadata and pages
             doc["pages"] = pages
@@ -543,6 +574,41 @@ class MongoDBManager:
             logger.error(f"Error deleting document {doc_id}: {e}")
             return False
     
+    @require_db('documents_collection', fallback={})
+    def get_extracted_entities(self, doc_id: str) -> dict:
+        """
+        Retrieves previously extracted entities for a given document.
+        Used to cache AI extractions and save API costs.
+        """
+        try:
+            doc = self.documents_collection.find_one({"doc_id": doc_id}, {"extracted_entities": 1})
+            if doc and "extracted_entities" in doc:
+                return doc["extracted_entities"]
+            return {}
+        except Exception as e:
+            logger.error(f"Error getting extracted entities for {doc_id}: {e}")
+            return {}
+
+    @require_db('documents_collection', fallback=False)
+    def save_extracted_entities(self, doc_id: str, new_entities: dict) -> bool:
+        """
+        Merges new extracted entities into the existing ones for the document.
+        """
+        try:
+            # First get existing
+            existing = self.get_extracted_entities(doc_id)
+            # Merge new_entities into existing
+            existing.update(new_entities)
+            
+            result = self.documents_collection.update_one(
+                {"doc_id": doc_id},
+                {"$set": {"extracted_entities": existing}}
+            )
+            return result.modified_count > 0 or result.matched_count > 0
+        except Exception as e:
+            logger.error(f"Error saving extracted entities for {doc_id}: {e}")
+            return False
+
     @require_db('pages_collection', 'documents_collection', fallback=[])
     def search_documents(self, query: str, limit: int = 20) -> List[Dict[str, Any]]:
         """
@@ -571,10 +637,9 @@ class MongoDBManager:
                 doc = self.documents_collection.find_one({"doc_id": doc_id})
                 
                 # Remove MongoDB _id
-                if "_id" in page:
-                    del page["_id"]
-                if doc and "_id" in doc:
-                    del doc["_id"]
+                self._serialize_doc(page)
+                if doc:
+                    self._serialize_doc(doc)
                 
                 result = {
                     "doc_id": doc_id,

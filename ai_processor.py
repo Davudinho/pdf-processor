@@ -313,7 +313,7 @@ class AIProcessor:
             logger.warning(f"  Failed: {failed_count} pages")
         logger.info("="*70)
     
-    def generate_document_summary(self, page_summaries: List[str]) -> dict:
+    def generate_document_summary(self, page_summaries: List[str], existing_categories: List[str] = None) -> dict:
         """
         Generate a concise executive summary and automatically categorize the entire document based on page summaries.
         """
@@ -327,7 +327,7 @@ class AIProcessor:
         if len(context) > 12000:
              context = context[:6000] + "\n\n[...intermediate pages omitted...]\n\n" + context[-6000:]
 
-        system_prompt = get_document_summary_prompt()
+        system_prompt = get_document_summary_prompt(existing_categories)
 
         try:
             logger.info(f"Generating document summary and category from {len(page_summaries)} pages...")
@@ -365,8 +365,11 @@ class AIProcessor:
         :param all_keywords: List of all keywords from all pages
         """
         try:
+            # Get existing categories from database
+            existing_categories = db_manager.get_unique_categories() if db_manager else []
+            
             # Create document summary and category using AI
-            doc_info = self.generate_document_summary(page_summaries)
+            doc_info = self.generate_document_summary(page_summaries, existing_categories)
             doc_summary = doc_info.get("summary", "")
             doc_category = doc_info.get("category", "Sonstiges")
             
@@ -437,23 +440,20 @@ class AIProcessor:
             logger.error(f"create_embedding: Unerwarteter Fehler: {e}")
             return []
 
-    def create_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
+    def create_embeddings_batch(self, texts: List[str], batch_size: int = 100) -> List[List[float]]:
         """
-        Erstellt Embeddings für mehrere Texte auf einmal.
+        Erstellt Embeddings für mehrere Texte mit Throttling-Schutz.
 
-        Effizienter als create_embedding() einzeln aufzurufen, weil
-        OpenAI alle Texte in einem einzigen API-Call verarbeitet.
-
-        Beispiel:
-            texts = ["Chunk 1 Text", "Chunk 2 Text", "Chunk 3 Text"]
-            embeddings = ai.create_embeddings_batch(texts)
-            # embeddings[0] = Vektor für "Chunk 1 Text"
-            # embeddings[1] = Vektor für "Chunk 2 Text"
-            # embeddings[2] = Vektor für "Chunk 3 Text"
+        Um RateLimitErrors und Kosten-Explosionen bei großen PDFs zu vermeiden,
+        werden die Texte in Batches von `batch_size` Chunks verarbeitet.
+        Zwischen jedem Batch wird kurz gewartet.
 
         :param texts: Liste von Texten
+        :param batch_size: Anzahl Texte pro API-Aufruf (default 100)
         :return: Liste von Vektoren (leere Liste bei Fehler)
         """
+        import time
+
         if not self.client:
             logger.error("create_embeddings_batch: OpenAI Client nicht initialisiert.")
             return []
@@ -461,34 +461,53 @@ class AIProcessor:
         if not texts:
             return []
 
-        # Leere Texte filtern, aber Position merken für spätere Zuordnung
+        # Leere Texte filtern und Länge kürzen
         valid_texts = [t[:32000] if len(t) > 32000 else t for t in texts if t and t.strip()]
 
         if not valid_texts:
             return []
 
-        try:
-            logger.info(f"Erstelle Batch-Embeddings für {len(valid_texts)} Texte...")
-            response = self.client.embeddings.create(
-                model="text-embedding-3-small",
-                input=valid_texts
-            )
-            # OpenAI gibt die Embeddings in der gleichen Reihenfolge zurück
-            embeddings = [item.embedding for item in response.data]
-            logger.info(f"Batch-Embeddings fertig: {len(embeddings)} Vektoren à {len(embeddings[0])} Dimensionen")
-            return embeddings
+        all_embeddings = []
+        total_batches = (len(valid_texts) + batch_size - 1) // batch_size
 
-        except openai.RateLimitError:
-            logger.warning("Rate Limit bei Batch-Embeddings. Versuche einzeln...")
-            # Fallback: einzeln verarbeiten
-            results = []
-            for text in valid_texts:
-                emb = self.create_embedding(text)
-                results.append(emb)
-            return results
-        except Exception as e:
-            logger.error(f"create_embeddings_batch: Fehler: {e}")
-            return []
+        logger.info(f"Starte Batch-Embedding: {len(valid_texts)} Chunks in {total_batches} Batches à {batch_size}...")
+
+        for batch_idx in range(total_batches):
+            batch_start = batch_idx * batch_size
+            batch_end = min(batch_start + batch_size, len(valid_texts))
+            batch = valid_texts[batch_start:batch_end]
+
+            logger.info(f"Batch {batch_idx + 1}/{total_batches}: {len(batch)} Chunks ({batch_start + 1}–{batch_end})...")
+
+            try:
+                response = self.client.embeddings.create(
+                    model="text-embedding-3-small",
+                    input=batch
+                )
+                batch_embeddings = [item.embedding for item in response.data]
+                all_embeddings.extend(batch_embeddings)
+                logger.info(f"  ✓ Batch {batch_idx + 1}/{total_batches} fertig ({len(batch_embeddings)} Vektoren)")
+
+            except openai.RateLimitError:
+                logger.warning(f"  Rate Limit bei Batch {batch_idx + 1}. Warte 10s und versuche einzeln...")
+                time.sleep(10)
+                # Fallback: einzeln verarbeiten
+                for text in batch:
+                    emb = self.create_embedding(text)
+                    all_embeddings.append(emb)
+                    time.sleep(0.2)
+            except Exception as e:
+                logger.error(f"  Fehler bei Batch {batch_idx + 1}: {e}")
+                # Füge leere Embeddings ein, damit die Indizes erhalten bleiben
+                all_embeddings.extend([[] for _ in batch])
+
+            # Kurze Pause zwischen Batches (außer nach dem letzten)
+            if batch_idx < total_batches - 1:
+                time.sleep(0.5)
+
+        logger.info(f"Batch-Embedding abgeschlossen: {len(all_embeddings)} Vektoren total.")
+        return all_embeddings
+
 
     def ask_question(self, question: str, context_chunks: List[str]) -> dict:
         """

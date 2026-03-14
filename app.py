@@ -34,6 +34,7 @@ app = Flask(__name__)
 # Configuration
 app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', 'uploads/')
 app.config['MAX_CONTENT_LENGTH'] = int(os.getenv('MAX_CONTENT_LENGTH', 50 * 1024 * 1024))
+app.config['MAX_PAGES_PER_PDF'] = int(os.getenv('MAX_PAGES_PER_PDF', 500))  # Hard limit per upload
 app.config['MONGO_URI'] = os.getenv('MONGO_URI', 'mongodb://localhost:27017/')
 app.config['DB_NAME'] = os.getenv('DB_NAME', 'pdf_intelligence_db')
 app.config['OPENAI_API_KEY'] = os.getenv('OPENAI_API_KEY')
@@ -64,6 +65,15 @@ ALLOWED_EXTENSIONS = {'pdf'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+@app.errorhandler(413)
+def request_entity_too_large(e):
+    """Return a clean JSON error when an uploaded file exceeds MAX_CONTENT_LENGTH."""
+    max_mb = app.config['MAX_CONTENT_LENGTH'] // (1024 * 1024)
+    return jsonify({
+        "success": False,
+        "error": f"Datei zu groß. Maximum: {max_mb} MB. Bitte eine kleinere Datei hochladen."
+    }), 413
 
 def process_document_async(doc_id, pages_data):
     """Background task: AI processing + Chunking + Qdrant Embedding."""
@@ -134,6 +144,14 @@ def upload_file():
             if not pages_data:
                  return jsonify({"success": False, "error": "Could not extract text from PDF"}), 400
 
+            # Check page limit to prevent runaway costs / rate limit errors
+            max_pages = app.config['MAX_PAGES_PER_PDF']
+            if len(pages_data) > max_pages:
+                return jsonify({
+                    "success": False,
+                    "error": f"PDF hat {len(pages_data)} Seiten. Maximum sind {max_pages} Seiten pro Upload."
+                }), 400
+
             # Step 2: Save PDF file + extracted text to MongoDB (with GridFS)
             logger.info(f"Saving to database with GridFS...")
             doc_id = db.save_pdf_with_pages(filepath, filename, pages_data)
@@ -169,9 +187,38 @@ def upload_file():
 
 @app.route('/documents', methods=['GET'])
 def list_documents():
+    """Return a paginated list of documents.
+
+    Query params:
+    - page: Page number, 1-indexed (default: 1)
+    - limit: Items per page (default: 50, max: 200)
+    """
     try:
-        docs = db.get_all_documents()
-        return jsonify({"success": True, "data": docs})
+        # Parse and clamp pagination params
+        try:
+            page = max(1, int(request.args.get('page', 1)))
+            limit = min(max(1, int(request.args.get('limit', 50))), 200)
+        except ValueError:
+            page = 1
+            limit = 50
+
+        skip = (page - 1) * limit
+        total = db.get_document_count()
+        docs = db.get_all_documents(limit=limit, skip=skip)
+
+        import math
+        total_pages = math.ceil(total / limit) if limit else 1
+
+        return jsonify({
+            "success": True,
+            "data": docs,
+            "pagination": {
+                "total": total,
+                "page": page,
+                "pages": total_pages,
+                "limit": limit
+            }
+        })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -390,6 +437,24 @@ def extract_entities():
         return jsonify({"success": False, "error": "Keine Entity-Typen ausgewählt."}), 400
 
     try:
+        # Caching-Logik: Prüfen, was schon vorhanden ist
+        existing_entities = db.get_extracted_entities(doc_id)
+        
+        # Finde heraus, welche Typen wirklich noch fehlen
+        missing_types = [et for et in entity_types if et not in existing_entities]
+        
+        if not missing_types:
+            logger.info(f"Entity Extraction für doc_id={doc_id}: Caching Hit (alle {len(entity_types)} Typen vorhanden).")
+            # Wir haben bereits alle angeforderten Typen in der DB
+            result = {t: existing_entities[t] for t in entity_types}
+            return jsonify({
+                "success": True,
+                "data": {
+                    "doc_id": doc_id,
+                    "entities": result
+                }
+            })
+
         # Kompletten Rohtext aller Seiten laden (NICHT RAG-basiert)
         pages = db.get_raw_text(doc_id)
         if not pages:
@@ -404,19 +469,28 @@ def extract_entities():
         if not full_text.strip():
             return jsonify({"success": False, "error": "Dokument enthält keinen extrahierbaren Text."}), 400
 
-        logger.info(f"Entity Extraction für doc_id={doc_id}: {len(full_text)} Zeichen, Typen={entity_types}")
+        logger.info(f"Entity Extraction für doc_id={doc_id}: {len(full_text)} Zeichen, Typen={missing_types} (fehlend)")
 
-        # KI-Extraktion
-        result = ai_processor.extract_entities(full_text, entity_types)
+        # KI-Extraktion nur für fehlende Typen
+        new_result = ai_processor.extract_entities(full_text, missing_types)
 
-        if "error" in result:
-            return jsonify({"success": False, "error": result["error"]}), 500
+        if "error" in new_result:
+            return jsonify({"success": False, "error": new_result["error"]}), 500
+
+        # Mische alte und neue Ergebnisse
+        combined_result = {**existing_entities, **new_result}
+        
+        # Speichere die neuen Ergebnisse kumulativ in der Datenbank
+        db.save_extracted_entities(doc_id, combined_result)
+
+        # Gib nur die vom User ursprünglich *angefragten* Typen zurück
+        final_return = {t: combined_result.get(t, []) for t in entity_types}
 
         return jsonify({
             "success": True,
             "data": {
                 "doc_id": doc_id,
-                "entities": result
+                "entities": final_return
             }
         })
 

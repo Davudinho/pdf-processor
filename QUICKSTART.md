@@ -41,7 +41,14 @@ sudo apt install tesseract-ocr
 brew install tesseract
 ```
 
-## 4. Setup Project
+## 4. Start Qdrant (Required for AI Vector Search)
+
+Run Qdrant via Docker:
+```bash
+docker run -d -p 6333:6333 qdrant/qdrant
+```
+
+## 5. Setup Project
 
 ```bash
 # Navigate to project
@@ -60,23 +67,25 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## 5. Configure Environment
+## 6. Configure Environment
 
 Create `.env` file:
 ```env
 OPENAI_API_KEY=sk-proj-your-api-key-here
 MONGO_URI=mongodb://localhost:27017/
 DB_NAME=pdf_intelligence_db
+QDRANT_HOST=localhost
+QDRANT_PORT=6333
 ```
 
-## 6. Run Tests
+## 7. Run Tests
 
 ```bash
 cd tests
 python test_mongodb_connection.py
 ```
 
-## 7. Start Application
+## 8. Start Application
 
 ```bash
 cd ..

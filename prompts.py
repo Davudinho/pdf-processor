@@ -10,16 +10,7 @@ To modify AI behavior, edit only this file – no need to touch ai_processor.py.
 # ============================================================
 
 # Available document categories for auto-categorization.
-# Add or remove entries here to expand/reduce the category set.
-DOCUMENT_CATEGORIES = [
-    "Rechnung",      # Invoice, receipts
-    "Vertrag",       # Contracts, agreements
-    "Lebenslauf",    # CVs, resumes, applicant profiles
-    "Bericht",       # Reports, analytics, summaries
-    "Formular",      # Forms, applications
-    "Präsentation",  # Slides, pitches
-    "Sonstiges",     # Other / Unknown
-]
+# This list is now managed dynamically via the database.
 
 # Descriptions for each entity type used in entity extraction.
 # Key: internal type name (matches frontend value)
@@ -70,12 +61,26 @@ RULES:
 """
 
 
-def get_document_summary_prompt() -> str:
+def get_document_summary_prompt(existing_categories: list = None) -> str:
     """
     System prompt for generating an executive document summary and auto-categorization.
     Used in: AIProcessor.generate_document_summary()
     """
-    category_list = "\n".join([f'        - "{cat}"' for cat in DOCUMENT_CATEGORIES])
+    if existing_categories:
+        category_list = "\n".join([f'        - "{cat}"' for cat in existing_categories])
+        category_instruction = f"""
+        ALLOWED CATEGORIES (Existing in Database):
+{category_list}
+
+        GUIDELINES FOR CATEGORY:
+        If the document perfectly matches one of the ALLOWED CATEGORIES above, use exactly that category name.
+        If it does NOT match firmly, INVENT a new, concise, professional category (maximum 1-2 words, e.g., "Arztbrief", "Kündigung").
+        """
+    else:
+        category_instruction = """
+        GUIDELINES FOR CATEGORY:
+        Invent a concise, professional category for this document (maximum 1-2 words, e.g., "Rechnung", "Vertrag", "Arztbrief", "Kündigung").
+        """
 
     return f"""
         You are an expert executive assistant.
@@ -85,13 +90,10 @@ def get_document_summary_prompt() -> str:
         REQUIRED OUTPUT FORMAT (JSON):
         {{
           "summary": "The executive summary text...",
-          "category": "One of the allowed categories"
+          "category": "The decided category name"
         }}
-
-        ALLOWED CATEGORIES:
-{category_list}
-
-        GUIDELINES:
+{category_instruction}
+        GUIDELINES FOR SUMMARY:
         1. Synthesize the information, do not just list what is on each page.
         2. Identify the core purpose, main results, and key dates/entities.
         3. Write the summary in the same language as the document (German or English).
