@@ -3,6 +3,7 @@ import json
 import logging
 import os
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
 from database import MongoDBManager
 from typing import Dict, Any, Optional, List
 from prompts import (
@@ -118,7 +119,7 @@ class AIProcessor:
                     {"role": "user", "content": f"Text to structure:\n\n{text_to_process}"} 
                 ],
                 temperature=0,
-                max_tokens=2500,  # Increased for summary + keywords
+                max_tokens=1000,  # Lowered to 1000 to prevent rate-limit 429 Too Many Requests errors
                 timeout=45
             )
             
@@ -231,29 +232,18 @@ class AIProcessor:
         processed_count = 0
         failed_count = 0
 
-        for idx, page in enumerate(pages, 1):
+        def process_single_page(page, idx):
             page_num = page.get("page_num")
             raw_text = page.get("raw_text", "")
             
-            # Skip already processed pages (optional optimization)
-            # CRITICAL CHANGE: Only skip if we actually HAVE a summary. 
-            # If status is "structured" but summary is empty, it means previous processing failed or was empty.
+            # Skip already processed pages
             if page.get("status") == "structured" and page.get("page_summary"):
                 logger.info(f"[{idx}/{len(pages)}] Page {page_num} already processed with summary, skipping...")
-                
-                # Collect existing data for document-level aggregation
-                existing_summary = page.get("page_summary", "")
-                existing_keywords = page.get("keywords", [])
-                
-                if existing_summary:
-                    all_summaries.append(existing_summary)
-                if existing_keywords:
-                    all_keywords.extend(existing_keywords)
-                
-                processed_count += 1
-                continue
+                return {
+                    "success": True, "skipped": True, "page_num": page_num,
+                    "summary": page.get("page_summary", ""), "keywords": page.get("keywords", [])
+                }
             
-            # If we are here, we are (re)processing the page
             if page.get("status") == "structured":
                  logger.info(f"[{idx}/{len(pages)}] Retrying page {page_num} (was 'structured' but missing summary)...")
             else:
@@ -261,21 +251,8 @@ class AIProcessor:
             logger.info(f"  Text length: {len(raw_text)} characters")
             
             structured_data = self.structure_text(raw_text)
-            
-            # Check processing status
             processing_status = structured_data.get("processing_status", "unknown")
             
-            if processing_status == "no_api_key":
-                logger.error(f"  ✗ Page {page_num} failed: No API key")
-                failed_count += 1
-            elif processing_status == "success":
-                logger.info(f"  ✓ Page {page_num} processed successfully")
-                processed_count += 1
-            else:
-                logger.warning(f"  ⚠ Page {page_num} processed with status: {processing_status}")
-                processed_count += 1
-            
-            # Extract summary and keywords from structured data
             page_summary = structured_data.get("summary", "")
             keywords = structured_data.get("keywords", [])
             
@@ -284,7 +261,6 @@ class AIProcessor:
             if keywords:
                 logger.info(f"  Keywords: {', '.join(keywords[:5])}")
             
-            # Update page with all extracted data
             success = db_manager.update_page_data(
                 doc_id=doc_id,
                 page_num=page_num,
@@ -293,13 +269,30 @@ class AIProcessor:
                 keywords=keywords
             )
             
-            if not success:
-                logger.error(f"  ✗ Failed to save to database for page {page_num}")
-                failed_count += 1
+            return {
+                "success": success and processing_status == "success",
+                "skipped": False,
+                "page_num": page_num,
+                "summary": page_summary,
+                "keywords": keywords,
+                "status": processing_status
+            }
+
+        # Process up to 5 pages concurrently to prevent waiting 5 minutes for 80 pages
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            # map preserves the order of the pages
+            results = list(executor.map(lambda arg: process_single_page(*arg), [(page, idx) for idx, page in enumerate(pages, 1)]))
+
+        for res in results:
+            if res["success"] or res["skipped"]:
+                processed_count += 1
+                if res["summary"]:
+                    all_summaries.append(res["summary"])
+                if res["keywords"]:
+                    all_keywords.extend(res["keywords"])
             else:
-                logger.info(f"  ✓ Saved to database")
-                all_summaries.append(page_summary)
-                all_keywords.extend(keywords)
+                failed_count += 1
+                logger.error(f"  ✗ Page {res['page_num']} failed with status: {res.get('status', 'db_error')}")
         
         # Generate document-level summary
         if all_summaries:

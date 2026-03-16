@@ -658,3 +658,11 @@ class MongoDBManager:
         except Exception as e:
             logger.error(f"Error searching documents: {e}")
             return []
+
+    def _serialize_doc(self, doc: Dict[str, Any]) -> None:
+        """
+        Helper method to remove MongoDB's internal ObjectId from dictionaries
+        before they are serialized to JSON and sent to the frontend.
+        """
+        if doc and "_id" in doc:
+            del doc["_id"]

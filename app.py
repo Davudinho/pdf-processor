@@ -275,6 +275,42 @@ def delete_document(doc_id):
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+@app.route('/documents/batch-delete', methods=['POST'])
+def batch_delete_documents():
+    """
+    Delete multiple documents at once based on a list of IDs.
+    Expects {"doc_ids": ["id1", "id2", ...]}
+    """
+    data = request.json
+    if not data or 'doc_ids' not in data or not isinstance(data['doc_ids'], list):
+        return jsonify({"success": False, "error": "Missing or invalid 'doc_ids' array in body"}), 400
+        
+    doc_ids = data['doc_ids']
+    deleted_count = 0
+    failed_ids = []
+    
+    for doc_id in doc_ids:
+        try:
+            success = db.delete_document(doc_id)
+            if success:
+                if qdrant_manager.is_connected():
+                    qdrant_manager.delete_document(doc_id)
+                deleted_count += 1
+            else:
+                failed_ids.append(doc_id)
+        except Exception as e:
+            logger.error(f"Error deleting doc {doc_id} in batch: {e}")
+            failed_ids.append(doc_id)
+            
+    return jsonify({
+        "success": True, 
+        "data": {
+            "deleted_count": deleted_count,
+            "failed_count": len(failed_ids),
+            "failed_ids": failed_ids
+        }
+    })
+
 @app.route('/search', methods=['GET'])
 def search_documents():
     """

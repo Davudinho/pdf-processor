@@ -9,6 +9,7 @@
 let isUploading = false;
 let selectedDocIds = [];  // Cross-Document: IDs of selected documents
 let availableDocs = [];   // Cache of available documents for multi-select
+let selectedDocsForDelete = []; // Bulk Delete: IDs of selected documents for deletion
 const POLLING_INTERVAL = 5000;
 
 // ============================================================
@@ -177,6 +178,11 @@ function renderDocuments(docs) {
     availableDocs = docs.filter(d => d.status === 'structured');
     renderMultiSelectDropdown();
     updateExtractDocSelect();
+    
+    // Cleanup any IDs in selectedDocsForDelete that might not exist anymore
+    const validDocIds = docs.map(d => d.doc_id);
+    selectedDocsForDelete = selectedDocsForDelete.filter(id => validDocIds.includes(id));
+    updateBulkDeleteUI(docs.length);
 
     if (!docs.length) {
         docsList.innerHTML = '<p style="color: var(--text-muted); grid-column: 1/-1; text-align: center;">Bisher wurden keine Dokumente hochgeladen.</p>';
@@ -208,7 +214,13 @@ function renderDocuments(docs) {
             <div class="glass-card doc-card" ${errorMsg}>
                 <div>
                     <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.25rem;">
-                        <div class="doc-title" title="${doc.filename}" style="margin-bottom: 0;">${doc.filename}</div>
+                        <div style="display: flex; align-items: flex-start; gap: 0.5rem;">
+                            <input type="checkbox" class="doc-delete-checkbox" value="${doc.doc_id}" 
+                                ${selectedDocsForDelete.includes(doc.doc_id) ? 'checked' : ''} 
+                                onchange="toggleDocDeleteSelection('${doc.doc_id}', this.checked, ${docs.length})"
+                                style="margin-top: 3px; cursor: pointer;">
+                            <div class="doc-title" title="${doc.filename}" style="margin-bottom: 0;">${doc.filename}</div>
+                        </div>
                         ${categoryHtml}
                     </div>
                     <div class="doc-meta">${doc.page_count} Seiten • Hochgeladen: ${dateStr}</div>
@@ -227,6 +239,92 @@ function renderDocuments(docs) {
 // ============================================================
 // DOCUMENT ACTIONS
 // ============================================================
+
+function toggleDocDeleteSelection(docId, isChecked, totalDocsCount) {
+    if (isChecked) {
+        if (!selectedDocsForDelete.includes(docId)) selectedDocsForDelete.push(docId);
+    } else {
+        selectedDocsForDelete = selectedDocsForDelete.filter(id => id !== docId);
+    }
+    updateBulkDeleteUI(totalDocsCount);
+}
+
+function toggleAllDocs() {
+    const isChecked = document.getElementById('select-all-docs').checked;
+    const allCheckboxes = document.querySelectorAll('.doc-delete-checkbox');
+    
+    selectedDocsForDelete = [];
+    if (isChecked) {
+        allCheckboxes.forEach(cb => {
+            cb.checked = true;
+            selectedDocsForDelete.push(cb.value);
+        });
+    } else {
+        allCheckboxes.forEach(cb => cb.checked = false);
+    }
+    updateBulkDeleteUI(allCheckboxes.length);
+}
+
+function updateBulkDeleteUI(totalDocsCount) {
+    const bulkActions = document.getElementById('bulk-actions');
+    const bulkDeleteCount = document.getElementById('bulk-delete-count');
+    const selectAllCheckbox = document.getElementById('select-all-docs');
+    const selectAllContainer = document.getElementById('select-all-container');
+    
+    // Hide 'Select All' if there are no docs
+    if (totalDocsCount === 0) {
+        selectAllContainer.style.display = 'none';
+        bulkActions.style.display = 'none';
+        return;
+    }
+    
+    selectAllContainer.style.display = 'flex';
+    
+    if (selectedDocsForDelete.length > 0) {
+        bulkActions.style.display = 'flex';
+        bulkDeleteCount.textContent = selectedDocsForDelete.length;
+    } else {
+        bulkActions.style.display = 'none';
+    }
+    
+    // Update 'Select All' checkbox state
+    const allCheckboxes = document.querySelectorAll('.doc-delete-checkbox');
+    if (allCheckboxes.length > 0 && selectedDocsForDelete.length === allCheckboxes.length) {
+        selectAllCheckbox.checked = true;
+    } else {
+        selectAllCheckbox.checked = false;
+    }
+}
+
+async function bulkDeleteDocuments() {
+    if (selectedDocsForDelete.length === 0) return;
+    if (!confirm(`Möchten Sie wirklich ${selectedDocsForDelete.length} Dokument(e) permanent löschen?`)) return;
+    
+    const btn = document.getElementById('bulk-delete-btn');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = `<span class="spinner" style="display:inline-block; margin-right:5px; width:12px; height:12px; border-width:2px; vertical-align:middle;"></span> Lösche...`;
+    btn.disabled = true;
+    
+    try {
+        const res = await fetch('/documents/batch-delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ doc_ids: selectedDocsForDelete })
+        });
+        const data = await res.json();
+        if (data.success) {
+            selectedDocsForDelete = [];
+            loadDocuments();
+        } else {
+            alert(data.error || "Ein Fehler ist bei der Massenlöschung aufgetreten.");
+        }
+    } catch (e) {
+        alert("Fehler beim Massenlöschen.");
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
 
 async function deleteDocument(id) {
     if (!confirm("Möchten Sie dieses Dokument wirklich permanent löschen?")) return;
