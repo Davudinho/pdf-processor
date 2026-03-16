@@ -32,9 +32,18 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # Configuration
+def _get_int_env(key, default):
+    val = os.getenv(key)
+    if val is None:
+        return default
+    try:
+        return int(str(val).split('#')[0].strip())
+    except ValueError:
+        return default
+
 app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', 'uploads/')
-app.config['MAX_CONTENT_LENGTH'] = int(os.getenv('MAX_CONTENT_LENGTH', 50 * 1024 * 1024))
-app.config['MAX_PAGES_PER_PDF'] = int(os.getenv('MAX_PAGES_PER_PDF', 500))  # Hard limit per upload
+app.config['MAX_CONTENT_LENGTH'] = _get_int_env('MAX_CONTENT_LENGTH', 50 * 1024 * 1024)
+app.config['MAX_PAGES_PER_PDF'] = _get_int_env('MAX_PAGES_PER_PDF', 500)  # Hard limit per upload
 app.config['MONGO_URI'] = os.getenv('MONGO_URI', 'mongodb://localhost:27017/')
 app.config['DB_NAME'] = os.getenv('DB_NAME', 'pdf_intelligence_db')
 app.config['OPENAI_API_KEY'] = os.getenv('OPENAI_API_KEY')
