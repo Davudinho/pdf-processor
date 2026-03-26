@@ -7,9 +7,9 @@ load_dotenv()
 
 class TestEmbeddings(unittest.TestCase):
     def setUp(self):
-        api_key = os.getenv("OPENAI_API_KEY")
+        api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
-            self.skipTest("OPENAI_API_KEY nicht gesetzt. Test übersprungen.")
+            self.skipTest("GEMINI_API_KEY nicht gesetzt. Test übersprungen.")
         
         self.ai = AIProcessor(api_key=api_key)
 
@@ -18,8 +18,8 @@ class TestEmbeddings(unittest.TestCase):
         vector = self.ai.create_embedding(text)
         
         self.assertIsInstance(vector, list)
-        self.assertEqual(len(vector), 1536, "Der Vektor sollte genau 1536 Dimensionen haben (text-embedding-3-small)")
-        self.assertIsInstance(vector[0], float)
+        self.assertEqual(len(vector), 3072, "Der Vektor sollte genau 3072 Dimensionen haben (gemini-embedding-001)")
+        self.assertTrue(len(vector) > 0 and isinstance(vector[0], float))
 
     def test_create_embeddings_batch(self):
         texts = [
@@ -32,9 +32,9 @@ class TestEmbeddings(unittest.TestCase):
         
         self.assertIsInstance(vectors, list)
         self.assertEqual(len(vectors), 3, "Es sollten 3 Vektoren zurückgegeben werden")
-        self.assertEqual(len(vectors[0]), 1536)
-        self.assertEqual(len(vectors[1]), 1536)
-        self.assertEqual(len(vectors[2]), 1536)
+        self.assertEqual(len(vectors[0]), 3072)
+        self.assertEqual(len(vectors[1]), 3072)
+        self.assertEqual(len(vectors[2]), 3072)
         
     def test_empty_text_handling(self):
         text = "   "
