@@ -235,6 +235,7 @@ input[type="file"] { display: none; }
     align-items: center;
     white-space: nowrap;
     letter-spacing: 0.02em;
+    flex-shrink: 0;
 }
 
 /* --- Chat UI --- */
@@ -538,9 +539,7 @@ input[type="file"] { display: none; }
     font-weight: 600;
     font-size: 1.15rem;
     margin-bottom: 0.25rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: break-word;
 }
 
 .doc-meta { font-size: 0.85rem; color: var(--text-muted); }
@@ -697,7 +696,7 @@ input[type="file"] { display: none; }
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
-.entity-checkboxes { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+.entity-checkboxes { display: flex; flex-wrap: wrap; gap: 0.6rem; min-width: 0; }
 
 .entity-checkbox {
     display: flex;

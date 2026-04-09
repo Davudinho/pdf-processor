@@ -71,7 +71,7 @@ pip install -r requirements.txt
 
 Create `.env` file:
 ```env
-OPENAI_API_KEY=sk-proj-your-api-key-here
+GEMINI_API_KEY=your-api-key-here
 MONGO_URI=mongodb://localhost:27017/
 DB_NAME=pdf_intelligence_db
 QDRANT_HOST=localhost

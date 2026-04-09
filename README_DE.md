@@ -61,7 +61,7 @@ Ein produktionsreifes System zur PDF-Verarbeitung mit KI-gestützter Textextrakt
 **Zweck:** Zusammenfassungen, Schlüsselwörter und strukturierte Daten generieren
 
 **Hauptfunktionen:**
-- OpenAI GPT-Integration
+- Google Gemini API-Integration
 - Seitenzusammenfassungen (50-100 Wörter)
 - Schlüsselwortextraktion (5-15 pro Seite)
 - Intelligente Textkürzung (8000 Zeichen)
@@ -163,7 +163,7 @@ fs.chunks: { files_id, n, data }  // 255KB Blöcke
 - **MongoDB** (lokale Installation)
 - **Tesseract OCR**
 - **OCRmyPDF** (optional aber empfohlen)
-- **OpenAI API-Schlüssel**
+- **Google Gemini API-Schlüssel**
 
 ---
 
@@ -194,7 +194,7 @@ cd pdf-processor
 pip install -r requirements.txt
 
 # Umgebung konfigurieren
-# .env-Datei mit OpenAI API-Schlüssel erstellen
+# .env-Datei mit Gemini API-Schlüssel erstellen
 ```
 
 ### 5. Ausführen
@@ -252,7 +252,7 @@ curl -o original.pdf "http://localhost:5000/document/{doc_id}/download"
 | **Dateispeicher** | GridFS | Große Dateien |
 | **PDF-Verarbeitung** | PyMuPDF | Textextraktion |
 | **OCR** | OCRmyPDF + Tesseract | Texterkennung |
-| **KI** | OpenAI GPT-3.5/4 | Textstrukturierung |
+| **KI** | Google Gemini (2.5-flash) | Textstrukturierung |
 | **Frontend** | HTML/JS | Weboberfläche |
 
 ---
@@ -263,7 +263,7 @@ curl -o original.pdf "http://localhost:5000/document/{doc_id}/download"
 
 ```env
 # Erforderlich
-OPENAI_API_KEY=sk-proj-ihr-api-schlüssel-hier
+GEMINI_API_KEY=ihr-api-schlüssel-hier
 
 # Optional (Standardwerte gezeigt)
 MONGO_URI=mongodb://localhost:27017/
@@ -291,10 +291,10 @@ MAX_CONTENT_LENGTH=52428800  # 50MB
 mongosh --eval "db.version()"
 ```
 
-### OpenAI API-Schlüssel nicht gefunden
+### Gemini API-Schlüssel nicht gefunden
 ```bash
 # .env-Datei erstellen mit:
-OPENAI_API_KEY=sk-proj-ihr-schlüssel-hier
+GEMINI_API_KEY=ihr-schlüssel-hier
 ```
 
 ### OCRmyPDF nicht gefunden (Optional)
@@ -312,7 +312,7 @@ pip install ocrmypdf
 pdf-processor/
 ├── app.py                    # Flask-Anwendung
 ├── database.py               # MongoDB & GridFS
-├── ai_processor.py           # OpenAI-Integration
+├── ai_processor.py           # Gemini-Integration
 ├── pdf_processor.py          # PDF- & OCR-Verarbeitung
 ├── requirements.txt          # Python-Abhängigkeiten
 ├── .env                      # Konfiguration

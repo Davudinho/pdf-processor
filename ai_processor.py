@@ -1,11 +1,13 @@
 import json
 import logging
 import os
+import re
+import time
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor
 from database import MongoDBManager
 from typing import Dict, Any, Optional, List
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 from prompts import (
     get_structure_text_prompt,
@@ -22,29 +24,81 @@ logger = logging.getLogger(__name__)
 class AIProcessor:
     def __init__(self, api_key: Optional[str] = None, model: str = "gemini-2.5-flash"):
         """
-        Initialize AI Processor for Google Gemini.
-        :param api_key: Gemini API Key. If None, tries to read from env or os.
+        Initialize AI Processor for Google Gemini (new google.genai SDK).
+        :param api_key: Gemini API Key. If None, tries to read from env.
         :param model: Gemini model to use.
         """
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
         self.client = None
         
         if not self.api_key:
-            logger.error("="*70)
+            logger.error("=" * 70)
             logger.error("CRITICAL: No GEMINI_API_KEY provided or found in environment.")
             logger.error("AI processing will fail. Please set GEMINI_API_KEY in .env file")
-            logger.error("="*70)
+            logger.error("=" * 70)
         else:
             try:
-                genai.configure(api_key=self.api_key)
-                self.client = True # Marker that it works
-                logger.info(f"Gemini client configured successfully (model: {model})")
-                logger.info(f"API key configured: {self.api_key[:10]}...{self.api_key[-4:]}")
+                self.client = genai.Client(api_key=self.api_key)
+                logger.info(f"Gemini client initialized successfully (model: {model})")
+                logger.info(f"API key: {self.api_key[:10]}...{self.api_key[-4:]}")
             except Exception as e:
-                logger.error(f"Failed to configure Gemini client: {e}")
-                logger.error("Check if your API key is valid")
+                logger.error(f"Failed to initialize Gemini client: {e}")
         
         self.model = model
+
+    def _clean_json(self, raw: str) -> str:
+        """Strip markdown fences, trailing commas, and other common JSON issues."""
+        # Remove ```json ... ``` fences
+        raw = re.sub(r"```json\s*", "", raw)
+        raw = re.sub(r"```\s*", "", raw)
+        raw = raw.strip()
+        # Remove trailing commas before } or ] (a common AI mistake)
+        raw = re.sub(r",\s*([}\]])", r"\1", raw)
+        return raw
+
+    def _parse_json_safe(self, raw: str) -> Optional[dict]:
+        """Try to parse JSON, returning None if it fails even after cleanup."""
+        cleaned = self._clean_json(raw)
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON parse error after cleanup: {e}\nRaw snippet: {cleaned[:200]}")
+            return None
+
+    def _generate_with_retry(self, system_prompt: str, user_prompt: str,
+                              config: dict, max_retries: int = 5, initial_delay: float = 20) -> Optional[str]:
+        """
+        Call Gemini generate_content with exponential backoff for 429 quota errors.
+        Returns the response text, or None if all retries are exhausted.
+        """
+        delay = initial_delay
+        for attempt in range(max_retries):
+            try:
+                response = self.client.models.generate_content(
+                    model=self.model,
+                    contents=user_prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_prompt,
+                        **config
+                    )
+                )
+                return response.text
+            except Exception as e:
+                error_msg = str(e)
+                if "429" in error_msg or "quota" in error_msg.lower() or "exhausted" in error_msg.lower():
+                    if attempt < max_retries - 1:
+                        logger.warning(
+                            f"Rate limit hit. Waiting {delay:.0f}s before retry "
+                            f"(attempt {attempt + 1}/{max_retries})..."
+                        )
+                        time.sleep(delay)
+                        delay = min(delay * 1.5, 120)  # cap at 2 minutes
+                    else:
+                        logger.error("Max retries reached - giving up.")
+                        raise
+                else:
+                    raise
+        return None
 
     def _get_default_structure(self) -> Dict[str, Any]:
         """Return a default empty structure for fallbacks."""
@@ -64,11 +118,9 @@ class AIProcessor:
         return all(key in data for key in required_keys)
 
     def structure_text(self, raw_text: str, max_chars: int = 8000) -> Dict[str, Any]:
-        """
-        Send raw text to Gemini to extract structure, summary, and keywords.
-        """
-        if not self.api_key or not self.client:
-            logger.error("Cannot structure text: Gemini API Key not configured")
+        """Send raw text to Gemini to extract structure, summary, and keywords."""
+        if not self.client:
+            logger.error("Cannot structure text: Gemini client not initialized")
             default = self._get_default_structure()
             default["processing_status"] = "no_api_key"
             return default
@@ -85,45 +137,41 @@ class AIProcessor:
             logger.info(f"Text too long ({len(raw_text)} chars), truncating to {max_chars}")
             mid_point = int(max_chars * 0.7)
             end_point = len(raw_text) - int(max_chars * 0.3)
-            
             safe_mid = raw_text.rfind(' ', 0, mid_point)
             safe_end = raw_text.find(' ', end_point)
-            
             if safe_mid == -1: safe_mid = mid_point
             if safe_end == -1: safe_end = end_point
-            
             first_part = raw_text[:safe_mid]
             last_part = raw_text[safe_end:]
-            text_to_process = f"{first_part}\n\n[...{len(raw_text) - len(first_part) - len(last_part)} chars truncated...]\n\n{last_part}"
+            text_to_process = (
+                f"{first_part}\n\n"
+                f"[...{len(raw_text) - len(first_part) - len(last_part)} chars truncated...]\n\n"
+                f"{last_part}"
+            )
 
         system_prompt = get_structure_text_prompt()
 
         try:
-            logger.info(f"Sending {len(text_to_process)} characters to Gemini ({self.model})...")
-            
-            model = genai.GenerativeModel(
-                model_name=self.model,
-                system_instruction=system_prompt,
-                generation_config={
+            logger.info(f"Sending {len(text_to_process)} chars to Gemini ({self.model})...")
+            raw = self._generate_with_retry(
+                system_prompt=system_prompt,
+                user_prompt=f"Text to structure:\n\n{text_to_process}",
+                config={
                     "response_mime_type": "application/json",
                     "temperature": 0.0,
-                    "max_output_tokens": 1000
+                    "max_output_tokens": 1000,
                 }
             )
-            
-            response = model.generate_content(f"Text to structure:\n\n{text_to_process}")
-            content = response.text
-            
-            logger.info(f"Received response from Gemini ({len(content)} characters)")
-            
-            # Cleanup markdown if present
-            clean_content = content.replace("```json", "").replace("```", "").strip()
-            
-            try:
-                data = json.loads(clean_content)
-                logger.info("Successfully parsed JSON response from Gemini")
-            except json.JSONDecodeError as e:
-                logger.error(f"JSON Parse Error: {e}")
+
+            if raw is None:
+                default = self._get_default_structure()
+                default["processing_status"] = "api_error"
+                return default
+
+            logger.info(f"Received response from Gemini ({len(raw)} chars)")
+            data = self._parse_json_safe(raw)
+
+            if data is None:
                 default = self._get_default_structure()
                 default["processing_status"] = "json_error"
                 return default
@@ -146,13 +194,11 @@ class AIProcessor:
             return default
 
     def process_document(self, db_manager: MongoDBManager, doc_id: str):
-        """
-        Process all pages of a document and update MongoDB with structured data.
-        """
+        """Process all pages of a document and update MongoDB with structured data."""
         logger.info(f"Starting AI processing for document: {doc_id}")
         
-        if not self.api_key or not self.client:
-            logger.error("CRITICAL: Cannot process document - API key not configured")
+        if not self.client:
+            logger.error("CRITICAL: Cannot process document - API client not initialized")
             pages = db_manager.get_raw_text(doc_id)
             for page in pages:
                 db_manager.update_page_data(
@@ -179,17 +225,15 @@ class AIProcessor:
             raw_text = page.get("raw_text", "")
             
             if page.get("status") == "structured" and page.get("page_summary"):
-                logger.info(f"[{idx}/{len(pages)}] Page {page_num} already processed with summary, skipping...")
+                logger.info(f"[{idx}/{len(pages)}] Page {page_num} already processed, skipping...")
                 return {
                     "success": True, "skipped": True, "page_num": page_num,
                     "summary": page.get("page_summary", ""), "keywords": page.get("keywords", [])
                 }
             
             logger.info(f"[{idx}/{len(pages)}] Processing page {page_num}...")
-            
             structured_data = self.structure_text(raw_text)
             processing_status = structured_data.get("processing_status", "unknown")
-            
             page_summary = structured_data.get("summary", "")
             keywords = structured_data.get("keywords", [])
             
@@ -202,7 +246,7 @@ class AIProcessor:
             )
             
             return {
-                "success": success and processing_status == "success",
+                "success": success and processing_status in ("success", "partial_success"),
                 "skipped": False,
                 "page_num": page_num,
                 "summary": page_summary,
@@ -210,8 +254,12 @@ class AIProcessor:
                 "status": processing_status
             }
 
-        with ThreadPoolExecutor(max_workers=5) as executor:
-            results = list(executor.map(lambda arg: process_single_page(*arg), [(page, idx) for idx, page in enumerate(pages, 1)]))
+        # Sequential processing to respect Gemini Free Tier limits (5 req/min burst)
+        results = []
+        for idx, page in enumerate(pages, 1):
+            results.append(process_single_page(page, idx))
+            if idx < len(pages):
+                time.sleep(4)  # Gentle pause between pages to avoid bursting the quota
 
         for res in results:
             if res["success"] or res["skipped"]:
@@ -230,33 +278,31 @@ class AIProcessor:
         logger.info(f"Processing complete for document {doc_id} ({processed_count}/{len(pages)} pages)")
     
     def generate_document_summary(self, page_summaries: List[str], existing_categories: List[str] = None) -> dict:
-        """
-        Generate a concise executive summary and automatically categorize the entire document.
-        """
+        """Generate a concise executive summary and automatically categorize the entire document."""
         if not page_summaries:
             return {"summary": "", "category": "Sonstiges"}
 
         context = "\n\n".join([f"Page {i+1}: {summary}" for i, summary in enumerate(page_summaries)])
-        
         if len(context) > 12000:
-             context = context[:6000] + "\n\n[...intermediate pages omitted...]\n\n" + context[-6000:]
+            context = context[:6000] + "\n\n[...intermediate pages omitted...]\n\n" + context[-6000:]
 
         system_prompt = get_document_summary_prompt(existing_categories)
 
         try:
-            model = genai.GenerativeModel(
-                model_name=self.model,
-                system_instruction=system_prompt,
-                generation_config={
+            raw = self._generate_with_retry(
+                system_prompt=system_prompt,
+                user_prompt=f"Here are the summaries of the document pages:\n\n{context}",
+                config={
                     "response_mime_type": "application/json",
                     "temperature": 0.3,
-                    "max_output_tokens": 500
+                    "max_output_tokens": 500,
                 }
             )
-            response = model.generate_content(f"Here are the summaries of the document pages:\n\n{context}")
-            content = response.text.strip()
-            
-            result = json.loads(content)
+            if raw is None:
+                raise ValueError("No response from API")
+            result = self._parse_json_safe(raw)
+            if result is None:
+                raise ValueError("Could not parse JSON response")
             return {
                 "summary": result.get("summary", ""),
                 "category": result.get("category", "Sonstiges")
@@ -266,17 +312,14 @@ class AIProcessor:
             summary_text = f"Document with {len(page_summaries)} pages. " + page_summaries[0]
             return {"summary": summary_text, "category": "Sonstiges"}
 
-    def _update_document_metadata(self, db_manager: MongoDBManager, doc_id: str, 
+    def _update_document_metadata(self, db_manager: MongoDBManager, doc_id: str,
                                    page_summaries: List[str], all_keywords: List[str]):
-        """
-        Update document-level metadata with aggregated summaries, keywords and category.
-        """
+        """Update document-level metadata with aggregated summaries, keywords and category."""
         try:
             existing_categories = db_manager.get_unique_categories() if db_manager else []
             doc_info = self.generate_document_summary(page_summaries, existing_categories)
             doc_summary = doc_info.get("summary", "")
             doc_category = doc_info.get("category", "Sonstiges")
-            
             unique_keywords = list(dict.fromkeys(all_keywords))[:30]
             
             if db_manager.documents_collection is not None:
@@ -296,10 +339,7 @@ class AIProcessor:
             logger.error(f"Error updating document metadata: {e}")
 
     def create_embedding(self, text: str) -> List[float]:
-        """
-        Erstellt einen Embedding-Vektor für einen Text über Gemini.
-        Modell: text-embedding-004 (768 Dimensionen)
-        """
+        """Erstellt einen Embedding-Vektor (768 Dimensionen) über Gemini Embedding."""
         if not self.client:
             logger.error("create_embedding: Gemini Client nicht initialisiert.")
             return []
@@ -310,25 +350,18 @@ class AIProcessor:
 
         try:
             text_to_embed = text[:32000] if len(text) > 32000 else text
-
-            response = genai.embed_content(
-                model="models/gemini-embedding-001",
-                content=text_to_embed,
-                task_type="retrieval_document"
+            response = self.client.models.embed_content(
+                model="gemini-embedding-001",
+                contents=text_to_embed,
             )
-            embedding = response['embedding']
-            return embedding
+            return response.embeddings[0].values
 
         except Exception as e:
             logger.error(f"create_embedding: Fehler: {e}")
             return []
 
-    def create_embeddings_batch(self, texts: List[str], batch_size: int = 100) -> List[List[float]]:
-        """
-        Erstellt Embeddings für mehrere Texte mit Throttling-Schutz über Gemini.
-        """
-        import time
-
+    def create_embeddings_batch(self, texts: List[str], batch_size: int = 50) -> List[List[float]]:
+        """Erstellt Embeddings für mehrere Texte mit Throttling-Schutz."""
         if not self.client:
             logger.error("create_embeddings_batch: Gemini Client nicht initialisiert.")
             return []
@@ -337,49 +370,41 @@ class AIProcessor:
             return []
 
         valid_texts = [t[:32000] if len(t) > 32000 else t for t in texts if t and t.strip()]
-
         if not valid_texts:
             return []
 
         all_embeddings = []
         total_batches = (len(valid_texts) + batch_size - 1) // batch_size
-
-        logger.info(f"Starte Batch-Embedding: {len(valid_texts)} Chunks in {total_batches} Batches à {batch_size}...")
+        logger.info(f"Starte Batch-Embedding: {len(valid_texts)} Chunks in {total_batches} Batches...")
 
         for batch_idx in range(total_batches):
             batch_start = batch_idx * batch_size
-            batch_end = min(batch_start + batch_size, len(valid_texts))
-            batch = valid_texts[batch_start:batch_end]
+            batch = valid_texts[batch_start:batch_start + batch_size]
 
             try:
-                response = genai.embed_content(
-                    model="models/gemini-embedding-001",
-                    content=batch,
-                    task_type="retrieval_document"
+                response = self.client.models.embed_content(
+                    model="gemini-embedding-001",
+                    contents=batch,
                 )
-                batch_embeddings = response['embedding']
+                batch_embeddings = [e.values for e in response.embeddings]
                 all_embeddings.extend(batch_embeddings)
                 logger.info(f"  ✓ Batch {batch_idx + 1}/{total_batches} fertig ({len(batch_embeddings)} Vektoren)")
 
             except Exception as e:
-                logger.warning(f"  Rate Limit/Error bei Batch {batch_idx + 1}: {e}. Warte 10s und versuche einzeln...")
+                logger.warning(f"  Fehler bei Batch {batch_idx + 1}: {e}. Fallback auf Einzelverarbeitung...")
                 time.sleep(10)
-                # Fallback: einzeln verarbeiten
                 for text in batch:
                     emb = self.create_embedding(text)
                     all_embeddings.append(emb)
-                    time.sleep(0.5)
+                    time.sleep(1)
 
             if batch_idx < total_batches - 1:
-                time.sleep(0.5)
+                time.sleep(1)
 
         return all_embeddings
 
-
     def ask_question(self, question: str, context_chunks: List[str]) -> dict:
-        """
-        Beantwortet eine Frage basierend auf den übergebenen Text-Chunks (RAG).
-        """
+        """Beantwortet eine Frage basierend auf den übergebenen Text-Chunks (RAG)."""
         if not self.client:
             logger.error("ask_question: Gemini Client nicht initialisiert.")
             return {"answer": "Fehler: KI-Service ist nicht verfügbar.", "follow_ups": []}
@@ -388,28 +413,28 @@ class AIProcessor:
             return {"answer": "Ich konnte keine passenden Informationen finden.", "follow_ups": []}
             
         context_text = "\n\n---\n\n".join(context_chunks)
-        
         system_prompt = get_ask_question_prompt()
         user_prompt = f"Hier ist der relevante Kontext:\n\n{context_text}\n\nFrage: {question}"
 
         try:
-            model = genai.GenerativeModel(
-                model_name=self.model,
-                system_instruction=system_prompt,
-                generation_config={
+            raw = self._generate_with_retry(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                config={
                     "response_mime_type": "application/json",
                     "temperature": 0.2,
-                    "max_output_tokens": 800
+                    "max_output_tokens": 800,
                 }
             )
-            response = model.generate_content(user_prompt)
-            content = response.text.strip()
-            result = json.loads(content)
+            if raw is None:
+                raise ValueError("No response from API")
+            result = self._parse_json_safe(raw)
+            if result is None:
+                raise ValueError("Could not parse JSON response")
             return {
                 "answer": result.get("answer", "Keine Antwort generiert."),
                 "follow_ups": result.get("follow_ups", [])
             }
-            
         except Exception as e:
             logger.error(f"Fehler bei ask_question: {e}")
             return {
@@ -418,9 +443,7 @@ class AIProcessor:
             }
 
     def extract_entities(self, text: str, entity_types: List[str]) -> dict:
-        """
-        Extrahiert benannte Entitäten aus einem Dokumenttext über Gemini.
-        """
+        """Extrahiert benannte Entitäten aus einem Dokumenttext über Gemini."""
         if not self.client:
             return {"error": "KI-Service nicht verfügbar."}
 
@@ -439,23 +462,26 @@ class AIProcessor:
         system_prompt = get_extract_entities_prompt(requested)
 
         try:
-            model = genai.GenerativeModel(
-                model_name=self.model,
-                system_instruction=system_prompt,
-                generation_config={
+            raw = self._generate_with_retry(
+                system_prompt=system_prompt,
+                user_prompt=f"Dokumenttext:\n\n{text}",
+                config={
                     "response_mime_type": "application/json",
                     "temperature": 0.1,
-                    "max_output_tokens": 3000
+                    "max_output_tokens": 8000,
                 }
             )
-            response = model.generate_content(f"Dokumenttext:\n\n{text}")
-            content = response.text.strip()
-            result = json.loads(content)
+            if raw is None:
+                raise ValueError("No response from API")
+            result = self._parse_json_safe(raw)
+            if result is None:
+                raise ValueError("Could not parse JSON")
             return result
 
         except Exception as e:
             logger.error(f"Fehler bei extract_entities: {e}")
             return {"error": f"KI-Verarbeitung fehlgeschlagen: {str(e)}"}
+
 
 if __name__ == "__main__":
     import sys

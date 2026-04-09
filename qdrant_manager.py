@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 # Konstanten
 COLLECTION_NAME = "pdf_chunks"
-VECTOR_SIZE = 3072        # text-embedding-004 hat 768 Dimensionen
+VECTOR_SIZE = 768        # gemini-embedding-001 hat 768 Dimensionen
 CHUNK_SIZE_DEFAULT = 500
 OVERLAP_DEFAULT = 50
 

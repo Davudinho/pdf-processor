@@ -59,7 +59,7 @@ A production-ready system for intelligent PDF processing with AI-powered OCR, te
 **Purpose:** Summaries, keywords, RAG, entity extraction, and categorization
 
 **Key Features:**
-- OpenAI `gpt-4o-mini` integration
+- Google Gemini (`gemini-2.5-flash`) integration
 - Page-level summaries and keyword extraction
 - Retrieval-Augmented Generation (RAG) with Qdrant vector search
 - Named Entity Extraction (persons, companies, amounts, dates, addresses)
@@ -80,7 +80,7 @@ A production-ready system for intelligent PDF processing with AI-powered OCR, te
 
 **Key Features:**
 - Qdrant vector database integration
-- OpenAI `text-embedding-ada-002` embeddings
+- Google Gemini `gemini-embedding-001` embeddings
 - Semantic similarity search across documents
 
 ### Data Structure
@@ -174,7 +174,7 @@ fs.chunks: { files_id, n, data }  // 255KB chunks
 - **MongoDB** (local installation)
 - **Tesseract OCR**
 - **OCRmyPDF** (optional but recommended)
-- **OpenAI API Key**
+- **Google Gemini API Key**
 - **Qdrant** (optional, for vector search; falls back to keyword search)
 
 ---
@@ -279,8 +279,8 @@ curl -o original.pdf "http://localhost:5000/document/{doc_id}/download"
 | **Vector DB** | Qdrant | Semantic search & RAG |
 | **PDF Processing** | PyMuPDF | Text extraction |
 | **OCR** | OCRmyPDF + Tesseract | Text recognition (scanned PDFs) |
-| **AI** | OpenAI gpt-4o-mini | Summarization, RAG, extraction, categorization |
-| **Embeddings** | text-embedding-ada-002 | Vector search |
+| **AI** | Google Gemini 2.5-flash | Summarization, RAG, extraction, categorization |
+| **Embeddings** | gemini-embedding-001 | Vector search |
 | **Frontend** | HTML / CSS / JavaScript | Glassmorphism Premium UI |
 
 ---
@@ -291,14 +291,14 @@ Create `.env` file:
 
 ```env
 # Required
-OPENAI_API_KEY=sk-proj-your-api-key-here
+GEMINI_API_KEY=your-api-key-here
 
 # Optional (defaults shown)
 MONGO_URI=mongodb://localhost:27017/
 DB_NAME=pdf_intelligence_db
 UPLOAD_FOLDER=uploads/
 MAX_CONTENT_LENGTH=52428800  # 50MB
-OPENAI_MODEL=gpt-4o-mini
+GEMINI_MODEL=gemini-2.5-flash
 
 # Qdrant (optional - falls back to keyword search if not set)
 QDRANT_HOST=localhost
@@ -325,10 +325,10 @@ QDRANT_PORT=6333
 mongosh --eval "db.version()"
 ```
 
-### OpenAI API Key Not Found
+### Google Gemini API Key Not Found
 ```bash
 # Create .env file with:
-OPENAI_API_KEY=sk-proj-your-key-here
+GEMINI_API_KEY=your-key-here
 ```
 
 ### OCRmyPDF Not Found (Optional)

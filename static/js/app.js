@@ -58,6 +58,17 @@ function escapeHtml(text) {
         .replaceAll("'", "&#039;");
 }
 
+/**
+ * Formats a filename for display by inserting <wbr> tags after natural
+ * break characters (hyphens, underscores, dots) so the browser breaks
+ * at those points instead of mid-character.
+ * @param {string} filename
+ * @returns {string} HTML string safe for innerHTML
+ */
+function formatFilename(filename) {
+    return escapeHtml(filename).replace(/([-_.])/g, '$1<wbr>');
+}
+
 // ============================================================
 // STATUS BOX
 // ============================================================
@@ -213,15 +224,15 @@ function renderDocuments(docs) {
         return `
             <div class="glass-card doc-card" ${errorMsg}>
                 <div>
-                    <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.25rem;">
-                        <div style="display: flex; align-items: flex-start; gap: 0.5rem;">
-                            <input type="checkbox" class="doc-delete-checkbox" value="${doc.doc_id}" 
-                                ${selectedDocsForDelete.includes(doc.doc_id) ? 'checked' : ''} 
-                                onchange="toggleDocDeleteSelection('${doc.doc_id}', this.checked, ${docs.length})"
-                                style="margin-top: 3px; cursor: pointer;">
-                            <div class="doc-title" title="${doc.filename}" style="margin-bottom: 0;">${doc.filename}</div>
-                        </div>
+                    <div style="margin-bottom: 0.25rem;">
                         ${categoryHtml}
+                    </div>
+                    <div style="display: flex; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <input type="checkbox" class="doc-delete-checkbox" value="${doc.doc_id}" 
+                            ${selectedDocsForDelete.includes(doc.doc_id) ? 'checked' : ''} 
+                            onchange="toggleDocDeleteSelection('${doc.doc_id}', this.checked, ${docs.length})"
+                            style="margin-top: 3px; cursor: pointer;">
+                        <div class="doc-title" title="${escapeHtml(doc.filename)}" style="margin-bottom: 0;">${formatFilename(doc.filename)}</div>
                     </div>
                     <div class="doc-meta">${doc.page_count} Seiten • Hochgeladen: ${dateStr}</div>
                     <span class="doc-status ${badgeClass}">${statusLabel}</span>
@@ -631,6 +642,7 @@ chatForm.addEventListener('submit', async (e) => {
 document.querySelectorAll('.entity-checkbox').forEach(label => {
     label.addEventListener('click', (e) => {
         if (e.target.tagName === 'INPUT') return;
+        e.preventDefault(); // Prevent browser from toggling the checkbox a second time (it's inside the label)
         const cb = label.querySelector('input[type="checkbox"]');
         cb.checked = !cb.checked;
         label.classList.toggle('checked', cb.checked);
