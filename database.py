@@ -97,8 +97,12 @@ class MongoDBManager:
             logger.info("Collections initialized: documents, pages, GridFS")
             
         except ConnectionFailure as e:
-            logger.error(f"Could not connect to MongoDB: {e}")
-            raise  # Fail fast! App should not start without DB. 
+            logger.error(
+                f"CRITICAL: Could not connect to MongoDB at '{self.uri}'. "
+                f"Check MONGO_URI environment variable (e.g. missing cluster ID in Atlas URL). "
+                f"Error: {e}"
+            )
+            self.client = None  # App starts, but all DB calls return safe fallbacks via @require_db
         except Exception as e:
              # Handle IndexKeySpecsConflict by attempting to drop and recreate
              if "IndexKeySpecsConflict" in str(e) or (hasattr(e, 'code') and e.code == 86):
