@@ -8,3 +8,4 @@ python-dotenv==1.0.0
 pillow
 werkzeug==3.0.1
 qdrant-client>=1.7.0
+gunicorn>=21.2.0

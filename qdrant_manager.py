@@ -1,4 +1,5 @@
 import logging
+import os
 import uuid
 from typing import List, Dict, Any, Optional, Union
 
@@ -36,30 +37,60 @@ class QdrantManager:
     2. search_similar()  → Qdrant findet die ähnlichsten Points zur Frage
     """
 
-    def __init__(self, host: str = "localhost", port: int = 6333):
+    def __init__(
+        self,
+        host: str = None,
+        port: int = None,
+        api_key: str = None,
+        https: bool = None,
+    ):
         """
         Stellt Verbindung zu Qdrant her.
 
-        :param host: Hostname des Qdrant-Containers (Standard: localhost)
-        :param port: Port der REST API (Standard: 6333)
+        Konfiguration wird automatisch aus Umgebungsvariablen gelesen:
+          QDRANT_HOST      – Hostname (Standard: localhost)
+          QDRANT_PORT      – Port     (Standard: 6333)
+          QDRANT_API_KEY   – API-Key  (nur für Qdrant Cloud)
+          QDRANT_HTTPS     – true/false (Standard: false)
+
+        :param host:    Überschreibt QDRANT_HOST
+        :param port:    Überschreibt QDRANT_PORT
+        :param api_key: Überschreibt QDRANT_API_KEY
+        :param https:   Überschreibt QDRANT_HTTPS
         """
-        self.host = host
-        self.port = port
+        self.host = host or os.environ.get("QDRANT_HOST", "localhost")
+        self.port = port or int(os.environ.get("QDRANT_PORT", 6333))
+        self.api_key = api_key or os.environ.get("QDRANT_API_KEY") or None
+        if https is not None:
+            self.https = https
+        else:
+            self.https = os.environ.get("QDRANT_HTTPS", "false").lower() == "true"
         self.client: Optional[QdrantClient] = None
         self._connect()
 
     def _connect(self):
         """Verbindung zu Qdrant aufbauen und Collection sicherstellen."""
         try:
-            self.client = QdrantClient(host=self.host, port=self.port, timeout=5)
+            if self.api_key:
+                # Qdrant Cloud: URL-basierte Verbindung mit API-Key und HTTPS
+                scheme = "https" if self.https else "http"
+                url = f"{scheme}://{self.host}:{self.port}"
+                self.client = QdrantClient(url=url, api_key=self.api_key, timeout=10)
+                logger.info(f"Qdrant Cloud verbunden: {url}")
+            else:
+                # Lokale Verbindung (Docker)
+                self.client = QdrantClient(host=self.host, port=self.port, timeout=5)
+                logger.info(f"Qdrant lokal verbunden: {self.host}:{self.port}")
             # Verbindungstest
             self.client.get_collections()
-            logger.info(f"Qdrant verbunden: {self.host}:{self.port}")
             # Collection anlegen falls nicht vorhanden
             self._ensure_collection()
         except Exception as e:
             logger.error(f"Qdrant Verbindung fehlgeschlagen: {e}")
-            logger.error("Stelle sicher, dass Docker läuft: docker compose up -d")
+            if not self.api_key:
+                logger.error("Stelle sicher, dass Docker läuft: docker compose up -d")
+            else:
+                logger.error("Prüfe QDRANT_HOST und QDRANT_API_KEY in der .env")
             self.client = None
 
     def _ensure_collection(self):
