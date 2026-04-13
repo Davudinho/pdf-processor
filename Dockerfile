@@ -34,4 +34,4 @@ EXPOSE 5000
 
 # Gunicorn starten: 4 Worker, bindet auf 0.0.0.0:5000
 # $PORT wird von Render/Railway automatisch gesetzt (Fallback: 5000)
-CMD ["sh", "-c", "gunicorn -w 4 -b 0.0.0.0:${PORT:-5000} --timeout 120 app:app"]
+CMD ["sh", "-c", "gunicorn -w 1 -b 0.0.0.0:${PORT:-5000} --timeout 300 --preload app:app"]
