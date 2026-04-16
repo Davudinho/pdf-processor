@@ -193,8 +193,85 @@ class AIProcessor:
             default["processing_status"] = "unknown_error"
             return default
 
-    def process_document(self, db_manager: MongoDBManager, doc_id: str):
-        """Process all pages of a document and update MongoDB with structured data."""
+    def structure_pages_batch(self, pages: List[Dict], max_chars_per_page: int = 3000) -> Dict[int, Dict[str, Any]]:
+        """
+        Process multiple pages in a single Gemini API call.
+        Returns a dict mapping page_num -> structured_data.
+        Used for large PDFs to avoid per-page API limits.
+        """
+        if not self.client:
+            return {}
+
+        # Build combined prompt from all pages in the batch
+        combined_parts = []
+        for page in pages:
+            page_num = page.get("page_num", "?")
+            raw_text = page.get("raw_text", "").strip()
+            if len(raw_text) > max_chars_per_page:
+                half = max_chars_per_page // 2
+                raw_text = raw_text[:half] + f"\n[...gekürzt...]\n" + raw_text[-half:]
+            combined_parts.append(f"=== SEITE {page_num} ===\n{raw_text}")
+
+        combined_text = "\n\n".join(combined_parts)
+        page_nums = [p.get("page_num") for p in pages]
+
+        system_prompt = (
+            "Du bist ein Dokumentenanalyst. Du erhältst mehrere Seiten eines PDF-Dokuments. "
+            "Für JEDE Seite erstellst du eine strukturierte Analyse. "
+            "Antworte mit einem JSON-Objekt, dessen Schlüssel die Seitennummern (als Strings) sind. "
+            "Jeder Wert hat folgende Felder: summary (string), keywords (array of strings), "
+            "sections (array of strings), measurements (array of strings), "
+            "key_fields (object with string values), tables (array of objects). "
+            "Halte die Zusammenfassungen auf max. 2-3 Sätze pro Seite. "
+            "Verwende die Sprache des Dokuments (Deutsch oder Englisch)."
+        )
+
+        try:
+            raw = self._generate_with_retry(
+                system_prompt=system_prompt,
+                user_prompt=f"Analysiere die folgenden Seiten:\n\n{combined_text}",
+                config={
+                    "response_mime_type": "application/json",
+                    "temperature": 0.0,
+                    "max_output_tokens": 2000 * len(pages),
+                }
+            )
+
+            if raw is None:
+                return {}
+
+            parsed = self._parse_json_safe(raw)
+            if not isinstance(parsed, dict):
+                return {}
+
+            # The response may use string keys ("1", "2") or int keys
+            result = {}
+            for page_num in page_nums:
+                entry = parsed.get(str(page_num)) or parsed.get(page_num)
+                if entry and isinstance(entry, dict):
+                    entry["processing_status"] = "success"
+                    result[page_num] = entry
+                else:
+                    result[page_num] = self._get_default_structure()
+                    result[page_num]["processing_status"] = "missing_in_batch"
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Batch page processing failed: {e}")
+            return {}
+
+    def process_document(self, db_manager: MongoDBManager, doc_id: str,
+                         batch_size: int = 5):
+        """
+        Process all pages of a document and update MongoDB with structured data.
+
+        Strategy:
+        - Small PDFs (≤ batch_size pages): one API call per page (original behaviour).
+        - Large PDFs (> batch_size pages): pages are grouped into batches so that
+          multiple pages are sent in a single API call, drastically reducing the number
+          of requests and avoiding Gemini's per-request page limits.
+        """
         logger.info(f"Starting AI processing for document: {doc_id}")
         
         if not self.client:
@@ -215,67 +292,98 @@ class AIProcessor:
             logger.warning(f"No pages found for document {doc_id}")
             return
 
-        all_summaries = []
-        all_keywords = []
-        processed_count = 0
+        # Separate already-processed pages to skip them
+        pending_pages = []
+        skipped_results = []
+        for page in pages:
+            if page.get("status") == "structured" and page.get("page_summary"):
+                skipped_results.append({
+                    "success": True, "skipped": True,
+                    "page_num": page.get("page_num"),
+                    "summary": page.get("page_summary", ""),
+                    "keywords": page.get("keywords", [])
+                })
+            else:
+                pending_pages.append(page)
+
+        logger.info(
+            f"Document {doc_id}: {len(pages)} pages total — "
+            f"{len(skipped_results)} already done, {len(pending_pages)} to process "
+            f"(batch_size={batch_size})"
+        )
+
+        all_summaries = [r["summary"] for r in skipped_results if r["summary"]]
+        all_keywords: List[str] = []
+        for r in skipped_results:
+            all_keywords.extend(r["keywords"])
+
+        processed_count = len(skipped_results)
         failed_count = 0
 
-        def process_single_page(page, idx):
-            page_num = page.get("page_num")
-            raw_text = page.get("raw_text", "")
-            
-            if page.get("status") == "structured" and page.get("page_summary"):
-                logger.info(f"[{idx}/{len(pages)}] Page {page_num} already processed, skipping...")
-                return {
-                    "success": True, "skipped": True, "page_num": page_num,
-                    "summary": page.get("page_summary", ""), "keywords": page.get("keywords", [])
-                }
-            
-            logger.info(f"[{idx}/{len(pages)}] Processing page {page_num}...")
-            structured_data = self.structure_text(raw_text)
-            processing_status = structured_data.get("processing_status", "unknown")
-            page_summary = structured_data.get("summary", "")
-            keywords = structured_data.get("keywords", [])
-            
-            success = db_manager.update_page_data(
-                doc_id=doc_id,
-                page_num=page_num,
-                structured_data=structured_data,
-                page_summary=page_summary,
-                keywords=keywords
+        # ── Batch processing ──────────────────────────────────────────────────
+        total_batches = (len(pending_pages) + batch_size - 1) // batch_size if pending_pages else 0
+
+        for batch_idx in range(total_batches):
+            batch_start = batch_idx * batch_size
+            batch = pending_pages[batch_start: batch_start + batch_size]
+            page_nums_in_batch = [p.get("page_num") for p in batch]
+
+            logger.info(
+                f"  Batch {batch_idx + 1}/{total_batches}: pages {page_nums_in_batch}"
             )
-            
-            return {
-                "success": success and processing_status in ("success", "partial_success"),
-                "skipped": False,
-                "page_num": page_num,
-                "summary": page_summary,
-                "keywords": keywords,
-                "status": processing_status
-            }
 
-        # Sequential processing to respect Gemini Free Tier limits (5 req/min burst)
-        results = []
-        for idx, page in enumerate(pages, 1):
-            results.append(process_single_page(page, idx))
-            if idx < len(pages):
-                time.sleep(4)  # Gentle pause between pages to avoid bursting the quota
+            # Call Gemini once for the whole batch
+            batch_results = self.structure_pages_batch(batch)
 
-        for res in results:
-            if res["success"] or res["skipped"]:
-                processed_count += 1
-                if res["summary"]:
-                    all_summaries.append(res["summary"])
-                if res["keywords"]:
-                    all_keywords.extend(res["keywords"])
-            else:
-                failed_count += 1
-                logger.error(f"  ✗ Page {res['page_num']} failed with status: {res.get('status', 'db_error')}")
-        
+            for page in batch:
+                page_num = page.get("page_num")
+                structured_data = batch_results.get(page_num)
+
+                if structured_data is None:
+                    # Batch call did not return data for this page → fall back to
+                    # individual call so we don't silently lose pages.
+                    logger.warning(
+                        f"    Page {page_num} missing from batch result – retrying individually"
+                    )
+                    structured_data = self.structure_text(page.get("raw_text", ""))
+                    time.sleep(2)
+
+                processing_status = structured_data.get("processing_status", "unknown")
+                page_summary = structured_data.get("summary", "")
+                keywords = structured_data.get("keywords", [])
+
+                success = db_manager.update_page_data(
+                    doc_id=doc_id,
+                    page_num=page_num,
+                    structured_data=structured_data,
+                    page_summary=page_summary,
+                    keywords=keywords
+                )
+
+                ok = success and processing_status in ("success", "partial_success")
+                if ok:
+                    processed_count += 1
+                    if page_summary:
+                        all_summaries.append(page_summary)
+                    all_keywords.extend(keywords)
+                else:
+                    failed_count += 1
+                    logger.error(
+                        f"    ✗ Page {page_num} failed (status={processing_status})"
+                    )
+
+            # Pause between batches to respect rate limits
+            if batch_idx < total_batches - 1:
+                time.sleep(5)
+
+        # ── Finalise document metadata ─────────────────────────────────────────
         if all_summaries:
             self._update_document_metadata(db_manager, doc_id, all_summaries, all_keywords)
-        
-        logger.info(f"Processing complete for document {doc_id} ({processed_count}/{len(pages)} pages)")
+
+        logger.info(
+            f"Processing complete for document {doc_id}: "
+            f"{processed_count}/{len(pages)} pages OK, {failed_count} failed."
+        )
     
     def generate_document_summary(self, page_summaries: List[str], existing_categories: List[str] = None) -> dict:
         """Generate a concise executive summary and automatically categorize the entire document."""

@@ -83,7 +83,7 @@ class PDFProcessor:
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=300  # 5 minutes timeout for large PDFs
+                timeout=900  # 15 minutes timeout for large PDFs (e.g. 80+ pages)
             )
             
             if result.returncode == 0:
