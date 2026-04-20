@@ -66,7 +66,7 @@ class AIProcessor:
             return None
 
     def _generate_with_retry(self, system_prompt: str, user_prompt: str,
-                              config: dict, max_retries: int = 5, initial_delay: float = 20) -> Optional[str]:
+                              config: dict, max_retries: int = 5, initial_delay: float = 8) -> Optional[str]:
         """
         Call Gemini generate_content with exponential backoff for 429 quota errors.
         Returns the response text, or None if all retries are exhausted.
@@ -233,7 +233,7 @@ class AIProcessor:
                 config={
                     "response_mime_type": "application/json",
                     "temperature": 0.0,
-                    "max_output_tokens": 2000 * len(pages),
+                    "max_output_tokens": 4000,  # flat cap: enough for 10 pages
                 }
             )
 
@@ -262,7 +262,7 @@ class AIProcessor:
             return {}
 
     def process_document(self, db_manager: MongoDBManager, doc_id: str,
-                         batch_size: int = 5):
+                         batch_size: int = 10):
         """
         Process all pages of a document and update MongoDB with structured data.
 
@@ -372,9 +372,9 @@ class AIProcessor:
                         f"    ✗ Page {page_num} failed (status={processing_status})"
                     )
 
-            # Pause between batches to respect rate limits
+            # Pause between batches to respect rate limits (Free Tier: ~10 RPM)
             if batch_idx < total_batches - 1:
-                time.sleep(5)
+                time.sleep(2)
 
         # ── Finalise document metadata ─────────────────────────────────────────
         if all_summaries:
