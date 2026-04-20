@@ -366,8 +366,15 @@ class MongoDBManager:
         :return: True if updated successfully
         """
         try:
+            # Check if there was an error in processing this page
+            processing_status = "success"
+            if structured_data and isinstance(structured_data, dict):
+                p_status = structured_data.get("processing_status", "")
+                if p_status in ["api_error", "json_error", "unknown_error", "no_api_key"]:
+                    processing_status = "error"
+
             update_fields = {
-                "status": "structured",
+                "status": "structured" if processing_status == "success" else "error",
                 "updated_at": datetime.utcnow()
             }
             
@@ -441,17 +448,19 @@ class MongoDBManager:
             # Enhance with processing status
             for doc in documents:
                 doc_id = doc["doc_id"]
-                
                 # Count processed pages
                 total_pages = self.pages_collection.count_documents({"doc_id": doc_id})
                 processed_pages = self.pages_collection.count_documents(
                     {"doc_id": doc_id, "status": "structured"}
                 )
+                error_pages = self.pages_collection.count_documents(
+                    {"doc_id": doc_id, "status": "error"}
+                )
                 
                 # Determine overall status (respect 'failed' if already set by an exception)
                 is_processed = total_pages > 0 and total_pages == processed_pages
-                if doc.get("status") == "failed":
-                    pass # Keep 'failed'
+                if doc.get("status") == "failed" or error_pages > 0:
+                    doc["status"] = "failed"
                 else:
                     doc["status"] = "structured" if is_processed else "processing"
                 
