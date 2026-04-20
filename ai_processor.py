@@ -117,6 +117,45 @@ class AIProcessor:
         required_keys = ["summary", "keywords", "sections", "measurements", "key_fields", "tables"]
         return all(key in data for key in required_keys)
 
+    def _is_page_worth_analyzing(self, raw_text: str, min_chars: int = 40) -> bool:
+        """
+        Determine whether a page contains enough meaningful content to justify
+        an AI API call.
+
+        Pages that are skipped (return False):
+        - Completely blank pages
+        - Pages containing only whitespace / line-breaks
+        - Pages whose entire content is a lone page number (e.g. "1", "42")
+
+        Pages that are NEVER skipped (return True):
+        - Table of contents (typically 200–500+ chars)
+        - Chapter title pages with a headline
+        - Any page with >= min_chars of real text
+
+        :param raw_text:  The extracted text of the page.
+        :param min_chars: Minimum number of meaningful characters required.
+        :return: True if the page should be sent to the AI, False if it can be skipped.
+        """
+        import re
+        stripped = raw_text.strip()
+
+        # 1. Completely empty
+        if not stripped:
+            return False
+
+        # 2. Only a page number (one or two digit number, possibly with surrounding
+        #    whitespace or a single newline — e.g. "\n42\n")
+        if re.fullmatch(r"\d{1,3}", stripped):
+            return False
+
+        # 3. Too little meaningful content overall
+        # Remove all whitespace and count what is left
+        content_chars = len(re.sub(r"\s+", "", stripped))
+        if content_chars < min_chars:
+            return False
+
+        return True
+
     def structure_text(self, raw_text: str, max_chars: int = 8000) -> Dict[str, Any]:
         """Send raw text to Gemini to extract structure, summary, and keywords."""
         if not self.client:
@@ -292,24 +331,41 @@ class AIProcessor:
             logger.warning(f"No pages found for document {doc_id}")
             return
 
-        # Separate already-processed pages to skip them
+        # Separate pages into three groups:
+        #  1. already_done  – processed in a previous run (skip)
+        #  2. empty         – blank/page-number-only pages (skip, no API call needed)
+        #  3. pending       – need to be sent to the AI
         pending_pages = []
         skipped_results = []
+        empty_count = 0
         for page in pages:
             if page.get("status") == "structured" and page.get("page_summary"):
+                # Already processed in a previous run
                 skipped_results.append({
                     "success": True, "skipped": True,
                     "page_num": page.get("page_num"),
                     "summary": page.get("page_summary", ""),
                     "keywords": page.get("keywords", [])
                 })
+            elif not self._is_page_worth_analyzing(page.get("raw_text", "")):
+                # Blank / page-number-only page — save a placeholder, no API call
+                empty_count += 1
+                empty_structure = self._get_default_structure()
+                empty_structure["processing_status"] = "skipped_empty"
+                db_manager.update_page_data(
+                    doc_id=doc_id,
+                    page_num=page.get("page_num"),
+                    structured_data=empty_structure,
+                    page_summary="[Seite ohne verwertbaren Inhalt]",
+                    keywords=[]
+                )
             else:
                 pending_pages.append(page)
 
         logger.info(
             f"Document {doc_id}: {len(pages)} pages total — "
-            f"{len(skipped_results)} already done, {len(pending_pages)} to process "
-            f"(batch_size={batch_size})"
+            f"{len(skipped_results)} already done, {empty_count} empty/skipped, "
+            f"{len(pending_pages)} to analyse (batch_size={batch_size})"
         )
 
         all_summaries = [r["summary"] for r in skipped_results if r["summary"]]
