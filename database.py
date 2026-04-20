@@ -448,9 +448,13 @@ class MongoDBManager:
                     {"doc_id": doc_id, "status": "structured"}
                 )
                 
-                # Determine overall status
+                # Determine overall status (respect 'failed' if already set by an exception)
                 is_processed = total_pages > 0 and total_pages == processed_pages
-                doc["status"] = "structured" if is_processed else "processing"
+                if doc.get("status") == "failed":
+                    pass # Keep 'failed'
+                else:
+                    doc["status"] = "structured" if is_processed else "processing"
+                
                 doc["processed_pages"] = processed_pages
                 doc["page_count"] = total_pages
                 
