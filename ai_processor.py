@@ -230,6 +230,7 @@ class AIProcessor:
             logger.error(f"Error during AI processing: {e}")
             default = self._get_default_structure()
             default["processing_status"] = "unknown_error"
+            default["error_message"] = str(e)
             return default
 
     def structure_pages_batch(self, pages: List[Dict], max_chars_per_page: int = 3000) -> Dict[int, Dict[str, Any]]:
@@ -298,6 +299,8 @@ class AIProcessor:
 
         except Exception as e:
             logger.error(f"Batch page processing failed: {e}")
+            # Ensure we return a dictionary that acts as a fallback for all pages in this batch
+            # Actually, returning {} falls back to structure_text which logs its own error_message.
             return {}
 
     def process_document(self, db_manager: MongoDBManager, doc_id: str,
@@ -378,6 +381,7 @@ class AIProcessor:
 
         # ── Batch processing ──────────────────────────────────────────────────
         total_batches = (len(pending_pages) + batch_size - 1) // batch_size if pending_pages else 0
+        consecutive_failures = 0
 
         for batch_idx in range(total_batches):
             batch_start = batch_idx * batch_size
@@ -419,14 +423,20 @@ class AIProcessor:
                 ok = success and processing_status in ("success", "partial_success")
                 if ok:
                     processed_count += 1
+                    consecutive_failures = 0
                     if page_summary:
                         all_summaries.append(page_summary)
                     all_keywords.extend(keywords)
                 else:
                     failed_count += 1
+                    consecutive_failures += 1
                     logger.error(
                         f"    ✗ Page {page_num} failed (status={processing_status})"
                     )
+                    
+                    if consecutive_failures >= 3:
+                        logger.error("Too many consecutive AI failures. Aborting document processing to prevent timeouts.")
+                        raise RuntimeError("KI-Verarbeitung abgebrochen: 3 aufeinanderfolgende Seiten sind fehlgeschlagen (Rate Limit oder API-Fehler).")
 
             # Pause between batches to respect rate limits (Free Tier: ~10 RPM)
             if batch_idx < total_batches - 1:
