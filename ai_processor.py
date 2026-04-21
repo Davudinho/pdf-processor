@@ -438,9 +438,10 @@ class AIProcessor:
                         logger.error("Too many consecutive AI failures. Aborting document processing to prevent timeouts.")
                         raise RuntimeError("KI-Verarbeitung abgebrochen: 3 aufeinanderfolgende Seiten sind fehlgeschlagen (Rate Limit oder API-Fehler).")
 
-            # Pause between batches to respect rate limits (Free Tier: ~10 RPM)
+            # Pause between batches to respect rate limits (Free Tier: 15 RPM max)
+            # Sleep 5s ensures we do not exceed ~12 requests per minute.
             if batch_idx < total_batches - 1:
-                time.sleep(2)
+                time.sleep(5)
 
         # ── Finalise document metadata ─────────────────────────────────────────
         if all_summaries:
@@ -573,7 +574,7 @@ class AIProcessor:
                     time.sleep(1)
 
             if batch_idx < total_batches - 1:
-                time.sleep(1)
+                time.sleep(5)
 
         return all_embeddings
 
