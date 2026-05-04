@@ -21,6 +21,7 @@ from database import MongoDBManager
 from ai_processor import AIProcessor
 from text_chunker import TextChunker
 from qdrant_manager import QdrantManager
+from agent import PdfAgent
 
 # Load environment variables
 load_dotenv()
@@ -67,6 +68,7 @@ text_chunker = TextChunker()  # Einmalig initialisiert, nicht bei jedem Request
 qdrant_manager = QdrantManager()  # Verbindet zu localhost:6333 (Docker)
 if not qdrant_manager.is_connected():
     logger.warning("Qdrant nicht erreichbar. RAG-Features deaktiviert. Starte Docker: docker compose up -d")
+pdf_agent = PdfAgent(ai_processor, db, qdrant_manager)
 
 ALLOWED_EXTENSIONS = {'pdf'}
 
@@ -540,6 +542,50 @@ def extract_entities():
     except Exception as e:
         logger.error(f"Error in /extract endpoint: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
+
+# ─── V2: KI-Agent Endpunkte ────────────────────────────────────────────────
+
+def run_agent_task_async(task_text: str, task_id: str):
+    """Background-Worker für den Agenten."""
+    try:
+        with app.app_context():
+            pdf_agent.run(task_text=task_text, task_id=task_id)
+    except Exception as e:
+        logger.error(f"Error in background agent for {task_id}: {e}")
+
+@app.route('/agent/task', methods=['POST'])
+def create_agent_task():
+    """Startet einen neuen autonomen KI-Agenten-Auftrag."""
+    data = request.json
+    if not data or not data.get('task'):
+        return jsonify({"success": False, "error": "Fehlende Aufgabe (task)."}), 400
+
+    task_text = data['task']
+    task_id = db.create_agent_task(task_text)
+    
+    if not task_id:
+        return jsonify({"success": False, "error": "Konnte Aufgabe nicht in der Datenbank speichern."}), 500
+
+    thread = threading.Thread(target=run_agent_task_async, args=(task_text, task_id))
+    thread.daemon = True
+    thread.start()
+
+    return jsonify({"success": True, "task_id": task_id})
+
+@app.route('/agent/task/<task_id>', methods=['GET'])
+def get_agent_task_status(task_id):
+    """Gibt den Status, Zwischenschritte und das Ergebnis eines Tasks zurück."""
+    task = db.get_agent_task(task_id)
+    if not task:
+        return jsonify({"success": False, "error": "Task nicht gefunden."}), 404
+    return jsonify({"success": True, "task": task})
+
+@app.route('/agent/tasks', methods=['GET'])
+def list_agent_tasks():
+    """Gibt die letzten Agent-Tasks zurück."""
+    limit = int(request.args.get('limit', 50))
+    tasks = db.get_all_agent_tasks(limit)
+    return jsonify({"success": True, "tasks": tasks})
 
 if __name__ == '__main__':
     # Validate API Key on startup

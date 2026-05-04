@@ -57,6 +57,7 @@ class MongoDBManager:
         self.db = None
         self.documents_collection = None  # Document-level metadata
         self.pages_collection = None      # Page-level data
+        self.agent_tasks_collection = None  # Agent tasks (V2)
         self.fs = None                    # GridFS for PDF storage
         self._connect()
 
@@ -74,9 +75,14 @@ class MongoDBManager:
             # Initialize collections
             self.documents_collection = self.db["documents"]  # Document-level metadata
             self.pages_collection = self.db["pages"]          # Page-level data
+            self.agent_tasks_collection = self.db["agent_tasks"]  # Agent tasks (V2)
             
             # Initialize GridFS for PDF storage
             self.fs = gridfs.GridFS(self.db)
+            
+            # Agent tasks index
+            self.agent_tasks_collection.create_index("task_id", unique=True)
+            self.agent_tasks_collection.create_index("created_at")
             
             # Legacy compatibility: keep reference to pages as 'collection'
             self.collection = self.pages_collection
@@ -683,3 +689,112 @@ class MongoDBManager:
         """
         if doc and "_id" in doc:
             del doc["_id"]
+
+    # ─── Agent Task Methods (V2) ──────────────────────────────────────────────
+
+    def create_agent_task(self, task_text: str) -> Optional[str]:
+        """Creates a new agent task and returns its task_id."""
+        if self.agent_tasks_collection is None:
+            logger.error("create_agent_task: agent_tasks_collection not initialized.")
+            return None
+        try:
+            task_id = str(uuid.uuid4())
+            self.agent_tasks_collection.insert_one({
+                "task_id": task_id,
+                "task_text": task_text,
+                "status": "running",
+                "steps": [],
+                "report": None,
+                "key_findings": [],
+                "error_message": None,
+                "created_at": datetime.utcnow(),
+                "completed_at": None,
+            })
+            logger.info(f"Agent task created: {task_id}")
+            return task_id
+        except Exception as e:
+            logger.error(f"create_agent_task: {e}")
+            return None
+
+    def add_agent_task_step(self, task_id: str, step_num: int, tool: str,
+                             tool_input: dict, tool_output: str) -> None:
+        """Appends a reasoning step to an existing agent task (live progress)."""
+        if self.agent_tasks_collection is None:
+            return
+        try:
+            step = {
+                "step_num": step_num,
+                "tool": tool,
+                "input": tool_input,
+                "output_summary": tool_output,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+            self.agent_tasks_collection.update_one(
+                {"task_id": task_id},
+                {"$push": {"steps": step}}
+            )
+        except Exception as e:
+            logger.error(f"add_agent_task_step: {e}")
+
+    def update_agent_task(self, task_id: str, status: str,
+                           report: str = None, key_findings: list = None,
+                           error_message: str = None) -> None:
+        """Updates the final status and result of an agent task."""
+        if self.agent_tasks_collection is None:
+            return
+        try:
+            update = {
+                "status": status,
+                "completed_at": datetime.utcnow(),
+            }
+            if report is not None:
+                update["report"] = report
+            if key_findings is not None:
+                update["key_findings"] = key_findings
+            if error_message is not None:
+                update["error_message"] = error_message
+
+            self.agent_tasks_collection.update_one(
+                {"task_id": task_id},
+                {"$set": update}
+            )
+        except Exception as e:
+            logger.error(f"update_agent_task: {e}")
+
+    def get_agent_task(self, task_id: str) -> Optional[Dict[str, Any]]:
+        """Returns a single agent task by its ID."""
+        if self.agent_tasks_collection is None:
+            return None
+        try:
+            task = self.agent_tasks_collection.find_one({"task_id": task_id})
+            if task:
+                self._serialize_doc(task)
+                # Convert datetimes to ISO strings for JSON serialization
+                for field in ("created_at", "completed_at"):
+                    if isinstance(task.get(field), datetime):
+                        task[field] = task[field].isoformat()
+            return task
+        except Exception as e:
+            logger.error(f"get_agent_task: {e}")
+            return None
+
+    def get_all_agent_tasks(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Returns all agent tasks, newest first."""
+        if self.agent_tasks_collection is None:
+            return []
+        try:
+            tasks = list(
+                self.agent_tasks_collection.find()
+                .sort("created_at", -1)
+                .limit(limit)
+            )
+            for t in tasks:
+                self._serialize_doc(t)
+                for field in ("created_at", "completed_at"):
+                    if isinstance(t.get(field), datetime):
+                        t[field] = t[field].isoformat()
+            return tasks
+        except Exception as e:
+            logger.error(f"get_all_agent_tasks: {e}")
+            return []
+

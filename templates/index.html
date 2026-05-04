@@ -140,6 +140,36 @@
             <div class="extract-results" id="extract-results"></div>
         </div>
 
+        <!-- KI-Agent Section (V2) -->
+        <div class="glass-card agent-section">
+            <div class="agent-header">
+                <h2>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M12 16v-4" />
+                        <path d="M12 8h.01" />
+                    </svg>
+                    Autonomer KI-Agent
+                </h2>
+                <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 0.2rem;">Gib dem Agenten eine komplexe Aufgabe. Er wird sie selbstständig ausführen.</p>
+            </div>
+
+            <form class="agent-input-area" id="agent-form" style="margin-top: 1rem;">
+                <input type="text" id="agent-input"
+                    placeholder="z.B. 'Finde alle Dokumente zum Thema X und vergleiche die wichtigsten Punkte'..." autocomplete="off"
+                    required style="flex: 1; padding: 1rem; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--card-bg); color: var(--text-main);">
+                <button type="submit" class="btn btn-primary" id="agent-btn">Aufgabe starten</button>
+            </form>
+
+            <div id="agent-tasks-container" style="margin-top: 2rem;">
+                <h3 style="font-size: 1rem; color: var(--text-main); margin-bottom: 1rem;">Meine Aufgaben</h3>
+                <div id="agent-tasks-list">
+                    <p style="color: var(--text-muted); text-align: center; font-size:0.9rem;">Noch keine Aufgaben.</p>
+                </div>
+            </div>
+        </div>
+
         <!-- Documents List -->
         <div class="docs-section">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
@@ -181,6 +211,9 @@
             </div>
         </div>
     </div>
+
+    <!-- External Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
     <!-- Application Logic -->
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>

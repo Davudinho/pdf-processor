@@ -696,13 +696,174 @@ async function runExtraction() {
             resultsDiv.innerHTML = `<div class="extract-empty" style="color:var(--danger);">Fehler: ${escapeHtml(data.error)}</div>`;
         }
     } catch (err) {
-        resultsDiv.innerHTML = '<div class="extract-empty" style="color:var(--danger);">Netzwerkfehler beim Extrahieren.</div>';
+        extractResults.innerHTML = `<div class="error-msg">Server-Fehler: ${error.message}</div>`;
     } finally {
-        btn.disabled = false;
-        spinner.style.display = 'none';
-        textEl.textContent = 'Extrahieren';
+        isExtracting = false;
+        extractSpinner.style.display = 'none';
+        extractText.textContent = 'Extrahieren';
     }
 }
+
+// ============================================================
+// V2: KI-Agent Logic
+// ============================================================
+const agentForm = document.getElementById('agent-form');
+const agentInput = document.getElementById('agent-input');
+const agentBtn = document.getElementById('agent-btn');
+const agentTasksList = document.getElementById('agent-tasks-list');
+let agentPollingInterval = null;
+
+if (agentForm) {
+    agentForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const taskText = agentInput.value.trim();
+        if (!taskText) return;
+
+        agentInput.value = '';
+        agentBtn.disabled = true;
+        agentBtn.innerHTML = '<div class="spinner" style="display:inline-block;"></div> Startet...';
+
+        try {
+            const res = await fetch('/agent/task', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ task: taskText })
+            });
+            const data = await res.json();
+            
+            if (data.success) {
+                // Task submitted, start polling list
+                pollAgentTasks();
+                if (!agentPollingInterval) {
+                   agentPollingInterval = setInterval(pollAgentTasks, 3000);
+                }
+            } else {
+                alert("Fehler beim Starten des Agenten: " + data.error);
+            }
+        } catch (err) {
+            console.error("Agent Error:", err);
+            alert("Netzwerkfehler beim Starten des Agenten.");
+        } finally {
+            agentBtn.disabled = false;
+            agentBtn.textContent = 'Aufgabe starten';
+        }
+    });
+}
+
+async function pollAgentTasks() {
+    try {
+        const res = await fetch('/agent/tasks?limit=10');
+        const data = await res.json();
+        if (!data.success) return;
+
+        renderAgentTasks(data.tasks);
+
+        // Stop polling if no tasks are running
+        const isRunning = data.tasks.some(t => t.status === 'running');
+        if (!isRunning && agentPollingInterval) {
+            clearInterval(agentPollingInterval);
+            agentPollingInterval = null;
+        } else if (isRunning && !agentPollingInterval) {
+             agentPollingInterval = setInterval(pollAgentTasks, 3000);
+        }
+    } catch (err) {
+        console.error("Error polling agent tasks:", err);
+    }
+}
+
+function renderAgentTasks(tasks) {
+    if (!tasks || tasks.length === 0) {
+        agentTasksList.innerHTML = '<p style="color: var(--text-muted); text-align: center; font-size:0.9rem;">Noch keine Aufgaben.</p>';
+        return;
+    }
+
+    agentTasksList.innerHTML = tasks.map(task => {
+        let statusBadge = '';
+        let resultHtml = '';
+        let toggleHtml = '';
+
+        if (task.status === 'running') {
+            statusBadge = '<span style="color:var(--primary); font-size:0.85rem; display:flex; align-items:center; gap:0.3rem;"><div class="spinner" style="display:inline-block;"></div> Läuft...</span>';
+            
+            let stepsHtml = '';
+            if (task.steps && task.steps.length > 0) {
+                const stepsList = task.steps.map((s, index) => {
+                    const toolName = s.tool || "Unbekannt";
+                    let outSummary = s.output_summary ? String(s.output_summary).substring(0, 150) + "..." : "";
+                    return `
+                        <div class="agent-step">
+                            <div class="agent-step-title">Schritt ${index + 1} <span class="agent-step-tool">${escapeHtml(toolName)}</span></div>
+                            <div class="agent-step-content">${escapeHtml(outSummary)}</div>
+                        </div>
+                    `;
+                }).join('');
+                
+                stepsHtml = `
+                    <div class="agent-timeline">
+                        ${stepsList}
+                        <div class="agent-pulse">Agent analysiert und plant...</div>
+                    </div>
+                `;
+            } else {
+                stepsHtml = `<div class="agent-timeline"><div class="agent-pulse">Agent wird initialisiert...</div></div>`;
+            }
+            
+            resultHtml = `<div style="margin-top: 1rem;">${stepsHtml}</div>`;
+        } else if (task.status === 'failed') {
+            statusBadge = '<span style="color:var(--danger); font-size:0.85rem;">❌ Fehlgeschlagen</span>';
+            resultHtml = `<div style="color:var(--danger); font-size:0.85rem; padding:0.5rem; background:#fee2e2; border-radius:4px; margin-top: 1rem;">${escapeHtml(task.error_message || "Unbekannter Fehler")}</div>`;
+        } else if (task.status === 'done') {
+            statusBadge = '<span style="color:var(--success); font-size:0.85rem;">✅ Abgeschlossen</span>';
+            let keyFindingsHtml = '';
+            if (task.key_findings && task.key_findings.length > 0) {
+                 keyFindingsHtml = `<ul style="margin:0 0 1.5rem 0; padding-left:1.5rem; color:var(--primary); font-weight:500;">${task.key_findings.map(f => `<li>${escapeHtml(f)}</li>`).join('')}</ul>`;
+            }
+            
+            let reportHtml = '';
+            if (typeof marked !== 'undefined' && task.report) {
+                reportHtml = `<div class="markdown-body">${marked.parse(task.report)}</div>`;
+            } else {
+                reportHtml = `<div style="white-space: pre-wrap;">${escapeHtml(task.report || "")}</div>`;
+            }
+
+            resultHtml = `
+                <div class="agent-result-content" style="display:none; padding:1.5rem; background:rgba(255, 255, 255, 0.7); border-radius:var(--radius-lg); border:1px solid var(--border); margin-top:1rem; box-shadow: var(--shadow-sm);">
+                    ${keyFindingsHtml}
+                    ${reportHtml}
+                </div>
+            `;
+            toggleHtml = `<button class="btn btn-sm btn-outline" style="margin-left:auto;" onclick="toggleAgentResult(event, this)">Ergebnis ansehen</button>`;
+        }
+
+        return `
+            <div class="agent-task-item" style="border:1px solid var(--border-color); border-radius:var(--radius-md); margin-bottom:1rem; padding:1rem;">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem;">
+                    <div style="flex:1;">
+                        <h4 style="margin:0 0 0.5rem 0; font-size:1rem; color:var(--text-main); font-weight:600;">${escapeHtml(task.task_text)}</h4>
+                        <div style="margin-bottom:0.8rem;">${statusBadge}</div>
+                    </div>
+                    ${toggleHtml}
+                </div>
+                ${resultHtml}
+            </div>
+        `;
+    }).join('');
+}
+
+window.toggleAgentResult = function(event, btn) {
+    const item = btn.closest('.agent-task-item');
+    const content = item.querySelector('.agent-result-content');
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        btn.textContent = 'Einklappen';
+    } else {
+        content.style.display = 'none';
+        btn.textContent = 'Ergebnis ansehen';
+    }
+};
+
+// Initial load for agent tasks
+pollAgentTasks();
 
 const entityLabels = {
     personen:  '👤 Personen',

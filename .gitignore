@@ -9,4 +9,5 @@ logs/
 .idea/
 *.log
 OLD/
-
+v2_backup/
+scratch/
