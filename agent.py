@@ -349,21 +349,31 @@ class PdfAgent:
             if tool_name == "list_all_documents":
                 return self._list_all_documents()
             elif tool_name == "search_in_documents":
-                return self._search_in_documents(
-                    query=args.get("query", ""),
-                    top_k=min(int(args.get("top_k", 5)), 10),
-                )
+                query = str(args.get("query", ""))
+                try:
+                    top_k = min(int(args.get("top_k", 5)), 10)
+                except (ValueError, TypeError):
+                    top_k = 5
+                return self._search_in_documents(query=query, top_k=top_k)
             elif tool_name == "get_document_summary":
-                return self._get_document_summary(args.get("doc_id", ""))
+                return self._get_document_summary(str(args.get("doc_id", "")))
             elif tool_name == "get_document_full_text":
+                try:
+                    max_chars = int(args.get("max_chars", 8000))
+                except (ValueError, TypeError):
+                    max_chars = 8000
                 return self._get_document_full_text(
-                    doc_id=args.get("doc_id", ""),
-                    max_chars=int(args.get("max_chars", 8000)),
+                    doc_id=str(args.get("doc_id", "")),
+                    max_chars=max_chars,
                 )
             elif tool_name == "compare_two_documents":
+                doc_id_1 = str(args.get("doc_id_1", ""))
+                doc_id_2 = str(args.get("doc_id_2", ""))
+                if not doc_id_1 or not doc_id_2:
+                    return {"error": "Fehlende Parameter: doc_id_1 und doc_id_2 muessen angegeben werden."}
                 return self._compare_two_documents(
-                    doc_id_1=args.get("doc_id_1", ""),
-                    doc_id_2=args.get("doc_id_2", ""),
+                    doc_id_1=doc_id_1,
+                    doc_id_2=doc_id_2,
                 )
             elif tool_name == "finish_with_report":
                 # Kein echter Ausführungsschritt – wird im Loop behandelt

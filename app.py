@@ -11,6 +11,7 @@ if not hasattr(pkgutil, 'find_loader'):
     pkgutil.find_loader = find_loader
 
 import threading
+from concurrent.futures import ThreadPoolExecutor
 import logging
 from flask import Flask, request, jsonify, render_template, abort, send_file
 from werkzeug.utils import secure_filename
@@ -31,6 +32,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+
+# Global Thread Pools for concurrency management (prevents OOM on Render)
+document_processor_pool = ThreadPoolExecutor(max_workers=2)
+agent_task_pool = ThreadPoolExecutor(max_workers=2)
 
 # Configuration
 def _get_int_env(key, default):
@@ -140,6 +145,12 @@ def upload_file():
         return jsonify({"success": False, "error": "No selected file"}), 400
         
     if file and allowed_file(file.filename):
+        # Magic-Byte Validation: Ensure the file actually starts with PDF signature
+        header = file.read(5)
+        file.seek(0)  # Reset pointer so it can be saved/processed properly
+        if header != b'%PDF-':
+            return jsonify({"success": False, "error": "Invalid file content. Not a real PDF file."}), 400
+            
         filename = secure_filename(file.filename)
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         
@@ -168,11 +179,9 @@ def upload_file():
             if not doc_id:
                 return jsonify({"success": False, "error": "Database save failed"}), 500
             
-            # Step 3: Starte Background-Thread (AI + Chunking + Qdrant)
-            logger.info(f"Starting async processing for {doc_id}")
-            thread = threading.Thread(target=process_document_async, args=(doc_id, pages_data))
-            thread.daemon = True
-            thread.start()
+            # Step 3: Starte Background-Thread über den Pool (Concurrency limit)
+            logger.info(f"Submitting async processing for {doc_id} to pool")
+            document_processor_pool.submit(process_document_async, doc_id, pages_data)
             
             return jsonify({
                 "success": True,
@@ -566,9 +575,7 @@ def create_agent_task():
     if not task_id:
         return jsonify({"success": False, "error": "Konnte Aufgabe nicht in der Datenbank speichern."}), 500
 
-    thread = threading.Thread(target=run_agent_task_async, args=(task_text, task_id))
-    thread.daemon = True
-    thread.start()
+    agent_task_pool.submit(run_agent_task_async, task_text, task_id)
 
     return jsonify({"success": True, "task_id": task_id})
 
