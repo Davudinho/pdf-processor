@@ -17,8 +17,8 @@ from qdrant_client.models import (
 logger = logging.getLogger(__name__)
 
 # Konstanten
-COLLECTION_NAME = "pdf_chunks"
-VECTOR_SIZE = 768        # gemini-embedding-001 hat 768 Dimensionen
+COLLECTION_NAME = "pdf_chunks_openai"
+VECTOR_SIZE = 1536        # openai text-embedding-3-small hat 1536 Dimensionen
 CHUNK_SIZE_DEFAULT = 500
 OVERLAP_DEFAULT = 50
 

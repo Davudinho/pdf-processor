@@ -1,23 +1,23 @@
 """
 PDF Intelligence Agent – V2
 ============================
-Ein ReAct-Agent der auf Basis von Gemini Function Calling autonom
+Ein ReAct-Agent der auf Basis von OpenAI Function Calling autonom
 Aufgaben ausführt: Suchen, Lesen, Vergleichen, Berichte erstellen.
 
 Ablauf:
 1. User gibt Task-Text ein
-2. Agent schickt Task + Tool-Definitionen an Gemini
-3. Gemini antwortet mit Werkzeug-Aufrufen
+2. Agent schickt Task + Tool-Definitionen an OpenAI
+3. OpenAI antwortet mit Werkzeug-Aufrufen
 4. Agent führt Werkzeuge aus, speichert Zwischenschritte in DB
-5. Loop bis Gemini "finish_with_report" aufruft
+5. Loop bis OpenAI "finish_with_report" aufruft
 6. Ergebnis wird in DB gespeichert
 """
 
+import json
 import logging
 import time
 from datetime import datetime
 from typing import Optional
-from google.genai import types
 
 logger = logging.getLogger(__name__)
 
@@ -25,132 +25,124 @@ logger = logging.getLogger(__name__)
 MAX_STEPS = 10
 
 
-# ─── Tool-Deklarationen für Gemini ───────────────────────────────────────────
+# ─── Tool-Deklarationen für OpenAI ───────────────────────────────────────────
 
-TOOL_DECLARATIONS = [
-    types.FunctionDeclaration(
-        name="list_all_documents",
-        description=(
-            "Listet alle verfügbaren Dokumente im System auf. "
-            "Gibt Name, Kategorie, Seitenanzahl und Status zurück. "
-            "Verwende dies zuerst, um zu sehen, welche Dokumente vorhanden sind."
-        ),
-        parameters=types.Schema(
-            type="OBJECT",
-            properties={},
-            required=[],
-        ),
-    ),
-    types.FunctionDeclaration(
-        name="search_in_documents",
-        description=(
-            "Führt eine semantische Suche über alle Dokumente durch. "
-            "Findet die relevantesten Textabschnitte zu einer Suchanfrage. "
-            "Verwende dies, um gezielt nach Inhalten, Themen oder Begriffen zu suchen."
-        ),
-        parameters=types.Schema(
-            type="OBJECT",
-            properties={
-                "query": types.Schema(
-                    type="STRING",
-                    description="Die Suchanfrage auf Deutsch oder Englisch."
-                ),
-                "top_k": types.Schema(
-                    type="INTEGER",
-                    description="Anzahl der Ergebnisse (Standard: 5, Maximum: 10)."
-                ),
-            },
-            required=["query"],
-        ),
-    ),
-    types.FunctionDeclaration(
-        name="get_document_summary",
-        description=(
-            "Liest die KI-generierte Zusammenfassung, Kategorie und Schlüsselwörter "
-            "eines bestimmten Dokuments. Verwende dies für einen schnellen Überblick."
-        ),
-        parameters=types.Schema(
-            type="OBJECT",
-            properties={
-                "doc_id": types.Schema(
-                    type="STRING",
-                    description="Die eindeutige ID des Dokuments (aus list_all_documents)."
-                ),
-            },
-            required=["doc_id"],
-        ),
-    ),
-    types.FunctionDeclaration(
-        name="get_document_full_text",
-        description=(
-            "Liest den vollständigen Rohtext eines Dokuments seitenweise. "
-            "Verwende dies für tiefe Analysen, wenn Zusammenfassung nicht ausreicht. "
-            "VORSICHT: Nutze dies nur wenn wirklich nötig, da es sehr viel Text liefert."
-        ),
-        parameters=types.Schema(
-            type="OBJECT",
-            properties={
-                "doc_id": types.Schema(
-                    type="STRING",
-                    description="Die eindeutige ID des Dokuments."
-                ),
-                "max_chars": types.Schema(
-                    type="INTEGER",
-                    description="Maximale Zeichenanzahl (Standard: 8000, um Tokenlimits zu vermeiden)."
-                ),
-            },
-            required=["doc_id"],
-        ),
-    ),
-    types.FunctionDeclaration(
-        name="compare_two_documents",
-        description=(
-            "Vergleicht zwei Dokumente inhaltlich miteinander und hebt Gemeinsamkeiten "
-            "und Unterschiede hervor. Gibt einen strukturierten Vergleich zurück."
-        ),
-        parameters=types.Schema(
-            type="OBJECT",
-            properties={
-                "doc_id_1": types.Schema(
-                    type="STRING",
-                    description="ID des ersten Dokuments."
-                ),
-                "doc_id_2": types.Schema(
-                    type="STRING",
-                    description="ID des zweiten Dokuments."
-                ),
-            },
-            required=["doc_id_1", "doc_id_2"],
-        ),
-    ),
-    types.FunctionDeclaration(
-        name="finish_with_report",
-        description=(
-            "Schließt die Aufgabe ab und gibt den finalen Bericht an den User zurück. "
-            "MUSS immer am Ende aufgerufen werden, wenn die Aufgabe abgeschlossen ist."
-        ),
-        parameters=types.Schema(
-            type="OBJECT",
-            properties={
-                "report": types.Schema(
-                    type="STRING",
-                    description=(
-                        "Der vollständige, gut formatierte Bericht in Markdown. "
-                        "Beginne mit einer kurzen Zusammenfassung, dann strukturierte Details."
-                    ),
-                ),
-                "key_findings": types.Schema(
-                    type="ARRAY",
-                    items=types.Schema(type="STRING"),
-                    description="Liste der 3-5 wichtigsten Erkenntnisse als kurze Sätze.",
-                ),
-            },
-            required=["report", "key_findings"],
-        ),
-    ),
+AGENT_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "list_all_documents",
+            "description": "Listet alle verfügbaren Dokumente im System auf. Gibt Name, Kategorie, Seitenanzahl und Status zurück. Verwende dies zuerst, um zu sehen, welche Dokumente vorhanden sind.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_in_documents",
+            "description": "Führt eine semantische Suche über alle Dokumente durch. Findet die relevantesten Textabschnitte zu einer Suchanfrage. Verwende dies, um gezielt nach Inhalten, Themen oder Begriffen zu suchen.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Die Suchanfrage auf Deutsch oder Englisch."
+                    },
+                    "top_k": {
+                        "type": "integer",
+                        "description": "Anzahl der Ergebnisse (Standard: 5, Maximum: 10)."
+                    }
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_document_summary",
+            "description": "Liest die KI-generierte Zusammenfassung, Kategorie und Schlüsselwörter eines bestimmten Dokuments. Verwende dies für einen schnellen Überblick.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "doc_id": {
+                        "type": "string",
+                        "description": "Die eindeutige ID des Dokuments (aus list_all_documents)."
+                    }
+                },
+                "required": ["doc_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_document_full_text",
+            "description": "Liest den vollständigen Rohtext eines Dokuments seitenweise. Verwende dies für tiefe Analysen, wenn Zusammenfassung nicht ausreicht. VORSICHT: Nutze dies nur wenn wirklich nötig, da es sehr viel Text liefert.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "doc_id": {
+                        "type": "string",
+                        "description": "Die eindeutige ID des Dokuments."
+                    },
+                    "max_chars": {
+                        "type": "integer",
+                        "description": "Maximale Zeichenanzahl (Standard: 8000, um Tokenlimits zu vermeiden)."
+                    }
+                },
+                "required": ["doc_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "compare_two_documents",
+            "description": "Vergleicht zwei Dokumente inhaltlich miteinander und hebt Gemeinsamkeiten und Unterschiede hervor. Gibt einen strukturierten Vergleich zurück.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "doc_id_1": {
+                        "type": "string",
+                        "description": "ID des ersten Dokuments."
+                    },
+                    "doc_id_2": {
+                        "type": "string",
+                        "description": "ID des zweiten Dokuments."
+                    }
+                },
+                "required": ["doc_id_1", "doc_id_2"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "finish_with_report",
+            "description": "Schließt die Aufgabe ab und gibt den finalen Bericht an den User zurück. MUSS immer am Ende aufgerufen werden, wenn die Aufgabe abgeschlossen ist.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "report": {
+                        "type": "string",
+                        "description": "Der vollständige, gut formatierte Bericht in Markdown. Beginne mit einer kurzen Zusammenfassung, dann strukturierte Details."
+                    },
+                    "key_findings": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Liste der 3-5 wichtigsten Erkenntnisse als kurze Sätze."
+                    }
+                },
+                "required": ["report", "key_findings"]
+            }
+        }
+    }
 ]
-
-AGENT_TOOLS = [types.Tool(function_declarations=TOOL_DECLARATIONS)]
 
 
 # ─── Der Agent ───────────────────────────────────────────────────────────────
@@ -159,8 +151,8 @@ class PdfAgent:
     """
     Autonomer ReAct-Agent für die PDF Intelligence Platform.
 
-    Verwendet Gemini Function Calling für den Reasoning-Action-Loop:
-    - Gemini entscheidet, welche Werkzeuge aufgerufen werden
+    Verwendet OpenAI Function Calling für den Reasoning-Action-Loop:
+    - OpenAI entscheidet, welche Werkzeuge aufgerufen werden
     - Agent führt Werkzeuge aus und gibt Ergebnisse zurück
     - Loop endet bei "finish_with_report"
     """
@@ -201,12 +193,10 @@ class PdfAgent:
             "Wichtig: Rufe nie dasselbe Werkzeug mit denselben Parametern zweimal auf."
         )
 
-        # Konversationsverlauf für Gemini (Multi-Turn)
+        # Konversationsverlauf für OpenAI (Multi-Turn)
         messages = [
-            types.Content(
-                role="user",
-                parts=[types.Part(text=task_text)]
-            )
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": task_text}
         ]
 
         step_count = 0
@@ -217,54 +207,38 @@ class PdfAgent:
                 step_count += 1
                 logger.info(f"[Agent] Schritt {step_count}/{MAX_STEPS}")
 
-                # Gemini aufrufen
+                # OpenAI aufrufen
                 try:
-                    response = self.ai.client.models.generate_content(
+                    response = self.ai.client.chat.completions.create(
                         model=self.ai.model,
-                        contents=messages,
-                        config=types.GenerateContentConfig(
-                            system_instruction=system_prompt,
-                            tools=AGENT_TOOLS,
-                            temperature=0.2,
-                        )
+                        messages=messages,
+                        tools=AGENT_TOOLS,
+                        temperature=0.2,
                     )
                 except Exception as api_err:
-                    raise RuntimeError(f"Gemini API-Fehler in Schritt {step_count}: {api_err}")
+                    raise RuntimeError(f"OpenAI API-Fehler in Schritt {step_count}: {api_err}")
 
-                # Antwort analysieren
-                candidate = response.candidates[0] if response.candidates else None
-                if not candidate or not candidate.content or not candidate.content.parts:
-                    raise RuntimeError("Gemini hat eine leere Antwort zurückgegeben.")
+                response_message = response.choices[0].message
+                
+                # Assistenten-Nachricht dem Verlauf hinzufügen (erforderlich für Tool-Aufrufe)
+                messages.append(response_message.model_dump(exclude_unset=True))
 
-                # Antwort dem Verlauf hinzufügen
-                messages.append(candidate.content)
-
-                # Alle Parts durchgehen (Gemini kann mehrere FunctionCalls auf einmal machen)
-                function_calls_in_response = [
-                    p.function_call
-                    for p in candidate.content.parts
-                    if hasattr(p, "function_call") and p.function_call
-                ]
-
-                if not function_calls_in_response:
-                    # Kein Werkzeug aufgerufen – Gemini hat Text geantwortet ohne finish_with_report
-                    text_reply = "".join(
-                        p.text for p in candidate.content.parts if hasattr(p, "text") and p.text
-                    )
-                    logger.warning(f"[Agent] Gemini antwortete mit Text statt Tool-Call: {text_reply[:200]}")
-                    # Wir behandeln das als Abschluss
+                if not response_message.tool_calls:
+                    # Kein Werkzeug aufgerufen – Modell hat direkt geantwortet
+                    text_reply = response_message.content or ""
+                    logger.warning(f"[Agent] OpenAI antwortete mit Text statt Tool-Call: {text_reply[:200]}")
                     final_result = {
                         "report": text_reply or "Aufgabe abgeschlossen (kein strukturierter Bericht).",
                         "key_findings": [],
                     }
                     break
 
-                # Werkzeuge ausführen und Ergebnisse sammeln
-                function_response_parts = []
-
-                for fc in function_calls_in_response:
-                    tool_name = fc.name
-                    tool_args = dict(fc.args) if fc.args else {}
+                for tool_call in response_message.tool_calls:
+                    tool_name = tool_call.function.name
+                    try:
+                        tool_args = json.loads(tool_call.function.arguments)
+                    except json.JSONDecodeError:
+                        tool_args = {}
 
                     logger.info(f"[Agent] Werkzeug '{tool_name}' mit {tool_args}")
 
@@ -286,29 +260,24 @@ class PdfAgent:
                             "report": tool_args.get("report", ""),
                             "key_findings": tool_args.get("key_findings", []),
                         }
+                        # Werkzeugergebnis für die aktuelle Iteration hinzufügen
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "content": json.dumps({"status": "finished"})
+                        })
                         break
 
-                    # Ergebnis für Gemini vorbereiten
-                    function_response_parts.append(
-                        types.Part(
-                            function_response=types.FunctionResponse(
-                                name=tool_name,
-                                response={"result": tool_result},
-                            )
-                        )
-                    )
+                    # Ergebnis für OpenAI vorbereiten
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "name": tool_name,
+                        "content": json.dumps(tool_result, ensure_ascii=False)
+                    })
 
                 if final_result:
                     break
-
-                # Werkzeug-Ergebnisse an Gemini zurückschicken
-                if function_response_parts:
-                    messages.append(
-                        types.Content(
-                            role="user",
-                            parts=function_response_parts,
-                        )
-                    )
 
                 # Kurze Pause zwischen Schritten (Rate-Limit-Schutz)
                 time.sleep(2)
@@ -376,7 +345,6 @@ class PdfAgent:
                     doc_id_2=doc_id_2,
                 )
             elif tool_name == "finish_with_report":
-                # Kein echter Ausführungsschritt – wird im Loop behandelt
                 return {"status": "finished"}
             else:
                 return {"error": f"Unbekanntes Werkzeug: {tool_name}"}
@@ -413,7 +381,6 @@ class PdfAgent:
             return {"error": "Suchanfrage ist leer."}
 
         if not self.qdrant.is_connected():
-            # Fallback: Einfache Keyword-Suche in den Zusammenfassungen
             return self._fallback_keyword_search(query, top_k)
 
         try:
@@ -537,7 +504,7 @@ class PdfAgent:
             raw = self.ai._generate_with_retry(
                 system_prompt="Du bist ein Dokumentenanalyst. Antworte nur auf Deutsch als JSON.",
                 user_prompt=compare_prompt,
-                config={"response_mime_type": "application/json", "temperature": 0.1, "max_output_tokens": 1000},
+                config={"response_format": {"type": "json_object"}, "temperature": 0.1, "max_tokens": 1000},
             )
 
             comparison = self.ai._parse_json_safe(raw) if raw else {}

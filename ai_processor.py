@@ -6,8 +6,7 @@ import time
 from datetime import datetime
 from database import MongoDBManager
 from typing import Dict, Any, Optional, List
-from google import genai
-from google.genai import types
+from openai import OpenAI
 
 from prompts import (
     get_structure_text_prompt,
@@ -22,37 +21,35 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class AIProcessor:
-    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-2.5-flash"):
+    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4o-mini"):
         """
-        Initialize AI Processor for Google Gemini (new google.genai SDK).
-        :param api_key: Gemini API Key. If None, tries to read from env.
-        :param model: Gemini model to use.
+        Initialize AI Processor for OpenAI.
+        :param api_key: OpenAI API Key. If None, tries to read from env.
+        :param model: OpenAI chat model to use.
         """
-        self.api_key = api_key or os.getenv("GEMINI_API_KEY")
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.client = None
         
         if not self.api_key:
             logger.error("=" * 70)
-            logger.error("CRITICAL: No GEMINI_API_KEY provided or found in environment.")
-            logger.error("AI processing will fail. Please set GEMINI_API_KEY in .env file")
+            logger.error("CRITICAL: No OPENAI_API_KEY provided or found in environment.")
+            logger.error("AI processing will fail. Please set OPENAI_API_KEY in .env file")
             logger.error("=" * 70)
         else:
             try:
-                self.client = genai.Client(api_key=self.api_key)
-                logger.info(f"Gemini client initialized successfully (model: {model})")
+                self.client = OpenAI(api_key=self.api_key)
+                logger.info(f"OpenAI client initialized successfully (model: {model})")
                 logger.info(f"API key: {self.api_key[:10]}...{self.api_key[-4:]}")
             except Exception as e:
-                logger.error(f"Failed to initialize Gemini client: {e}")
+                logger.error(f"Failed to initialize OpenAI client: {e}")
         
         self.model = model
 
     def _clean_json(self, raw: str) -> str:
         """Strip markdown fences, trailing commas, and other common JSON issues."""
-        # Remove ```json ... ``` fences
         raw = re.sub(r"```json\s*", "", raw)
         raw = re.sub(r"```\s*", "", raw)
         raw = raw.strip()
-        # Remove trailing commas before } or ] (a common AI mistake)
         raw = re.sub(r",\s*([}\]])", r"\1", raw)
         return raw
 
@@ -68,24 +65,28 @@ class AIProcessor:
     def _generate_with_retry(self, system_prompt: str, user_prompt: str,
                               config: dict, max_retries: int = 5, initial_delay: float = 8) -> Optional[str]:
         """
-        Call Gemini generate_content with exponential backoff for 429 quota errors.
+        Call OpenAI chat completions with exponential backoff for 429 quota errors.
         Returns the response text, or None if all retries are exhausted.
         """
         delay = initial_delay
         for attempt in range(max_retries):
             try:
-                response = self.client.models.generate_content(
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ]
+                
+                response = self.client.chat.completions.create(
                     model=self.model,
-                    contents=user_prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=system_prompt,
-                        **config
-                    )
+                    messages=messages,
+                    temperature=config.get("temperature", 0.0),
+                    max_tokens=config.get("max_tokens", 1000),
+                    response_format=config.get("response_format", None)
                 )
-                return response.text
+                return response.choices[0].message.content
             except Exception as e:
                 error_msg = str(e)
-                if "429" in error_msg or "quota" in error_msg.lower() or "exhausted" in error_msg.lower():
+                if "429" in error_msg or "quota" in error_msg.lower() or "rate limit" in error_msg.lower():
                     if attempt < max_retries - 1:
                         logger.warning(
                             f"Rate limit hit. Waiting {delay:.0f}s before retry "
@@ -118,48 +119,21 @@ class AIProcessor:
         return all(key in data for key in required_keys)
 
     def _is_page_worth_analyzing(self, raw_text: str, min_chars: int = 40) -> bool:
-        """
-        Determine whether a page contains enough meaningful content to justify
-        an AI API call.
-
-        Pages that are skipped (return False):
-        - Completely blank pages
-        - Pages containing only whitespace / line-breaks
-        - Pages whose entire content is a lone page number (e.g. "1", "42")
-
-        Pages that are NEVER skipped (return True):
-        - Table of contents (typically 200–500+ chars)
-        - Chapter title pages with a headline
-        - Any page with >= min_chars of real text
-
-        :param raw_text:  The extracted text of the page.
-        :param min_chars: Minimum number of meaningful characters required.
-        :return: True if the page should be sent to the AI, False if it can be skipped.
-        """
         import re
         stripped = raw_text.strip()
-
-        # 1. Completely empty
         if not stripped:
             return False
-
-        # 2. Only a page number (one or two digit number, possibly with surrounding
-        #    whitespace or a single newline — e.g. "\n42\n")
         if re.fullmatch(r"\d{1,3}", stripped):
             return False
-
-        # 3. Too little meaningful content overall
-        # Remove all whitespace and count what is left
         content_chars = len(re.sub(r"\s+", "", stripped))
         if content_chars < min_chars:
             return False
-
         return True
 
     def structure_text(self, raw_text: str, max_chars: int = 8000) -> Dict[str, Any]:
-        """Send raw text to Gemini to extract structure, summary, and keywords."""
+        """Send raw text to OpenAI to extract structure, summary, and keywords."""
         if not self.client:
-            logger.error("Cannot structure text: Gemini client not initialized")
+            logger.error("Cannot structure text: OpenAI client not initialized")
             default = self._get_default_structure()
             default["processing_status"] = "no_api_key"
             return default
@@ -170,7 +144,6 @@ class AIProcessor:
             default["processing_status"] = "empty_text"
             return default
 
-        # Intelligent text truncation for large pages
         text_to_process = raw_text
         if len(raw_text) > max_chars:
             logger.info(f"Text too long ({len(raw_text)} chars), truncating to {max_chars}")
@@ -191,14 +164,14 @@ class AIProcessor:
         system_prompt = get_structure_text_prompt()
 
         try:
-            logger.info(f"Sending {len(text_to_process)} chars to Gemini ({self.model})...")
+            logger.info(f"Sending {len(text_to_process)} chars to OpenAI ({self.model})...")
             raw = self._generate_with_retry(
                 system_prompt=system_prompt,
                 user_prompt=f"Text to structure:\n\n{text_to_process}",
                 config={
-                    "response_mime_type": "application/json",
+                    "response_format": {"type": "json_object"},
                     "temperature": 0.0,
-                    "max_output_tokens": 1000,
+                    "max_tokens": 1000,
                 }
             )
 
@@ -207,7 +180,7 @@ class AIProcessor:
                 default["processing_status"] = "api_error"
                 return default
 
-            logger.info(f"Received response from Gemini ({len(raw)} chars)")
+            logger.info(f"Received response from OpenAI ({len(raw)} chars)")
             data = self._parse_json_safe(raw)
 
             if data is None:
@@ -235,14 +208,12 @@ class AIProcessor:
 
     def structure_pages_batch(self, pages: List[Dict], max_chars_per_page: int = 3000) -> Dict[int, Dict[str, Any]]:
         """
-        Process multiple pages in a single Gemini API call.
+        Process multiple pages in a single API call.
         Returns a dict mapping page_num -> structured_data.
-        Used for large PDFs to avoid per-page API limits.
         """
         if not self.client:
             return {}
 
-        # Build combined prompt from all pages in the batch
         combined_parts = []
         for page in pages:
             page_num = page.get("page_num", "?")
@@ -271,9 +242,9 @@ class AIProcessor:
                 system_prompt=system_prompt,
                 user_prompt=f"Analysiere die folgenden Seiten:\n\n{combined_text}",
                 config={
-                    "response_mime_type": "application/json",
+                    "response_format": {"type": "json_object"},
                     "temperature": 0.0,
-                    "max_output_tokens": 4000,  # flat cap: enough for 10 pages
+                    "max_tokens": 4000,
                 }
             )
 
@@ -284,7 +255,6 @@ class AIProcessor:
             if not isinstance(parsed, dict):
                 return {}
 
-            # The response may use string keys ("1", "2") or int keys
             result = {}
             for page_num in page_nums:
                 entry = parsed.get(str(page_num)) or parsed.get(page_num)
@@ -299,21 +269,10 @@ class AIProcessor:
 
         except Exception as e:
             logger.error(f"Batch page processing failed: {e}")
-            # Ensure we return a dictionary that acts as a fallback for all pages in this batch
-            # Actually, returning {} falls back to structure_text which logs its own error_message.
             return {}
 
     def process_document(self, db_manager: MongoDBManager, doc_id: str,
                          batch_size: int = 10):
-        """
-        Process all pages of a document and update MongoDB with structured data.
-
-        Strategy:
-        - Small PDFs (≤ batch_size pages): one API call per page (original behaviour).
-        - Large PDFs (> batch_size pages): pages are grouped into batches so that
-          multiple pages are sent in a single API call, drastically reducing the number
-          of requests and avoiding Gemini's per-request page limits.
-        """
         logger.info(f"Starting AI processing for document: {doc_id}")
         
         if not self.client:
@@ -334,16 +293,11 @@ class AIProcessor:
             logger.warning(f"No pages found for document {doc_id}")
             return
 
-        # Separate pages into three groups:
-        #  1. already_done  – processed in a previous run (skip)
-        #  2. empty         – blank/page-number-only pages (skip, no API call needed)
-        #  3. pending       – need to be sent to the AI
         pending_pages = []
         skipped_results = []
         empty_count = 0
         for page in pages:
             if page.get("status") == "structured" and page.get("page_summary"):
-                # Already processed in a previous run
                 skipped_results.append({
                     "success": True, "skipped": True,
                     "page_num": page.get("page_num"),
@@ -351,7 +305,6 @@ class AIProcessor:
                     "keywords": page.get("keywords", [])
                 })
             elif not self._is_page_worth_analyzing(page.get("raw_text", "")):
-                # Blank / page-number-only page — save a placeholder, no API call
                 empty_count += 1
                 empty_structure = self._get_default_structure()
                 empty_structure["processing_status"] = "skipped_empty"
@@ -379,7 +332,6 @@ class AIProcessor:
         processed_count = len(skipped_results)
         failed_count = 0
 
-        # ── Batch processing ──────────────────────────────────────────────────
         total_batches = (len(pending_pages) + batch_size - 1) // batch_size if pending_pages else 0
         consecutive_failures = 0
 
@@ -388,11 +340,8 @@ class AIProcessor:
             batch = pending_pages[batch_start: batch_start + batch_size]
             page_nums_in_batch = [p.get("page_num") for p in batch]
 
-            logger.info(
-                f"  Batch {batch_idx + 1}/{total_batches}: pages {page_nums_in_batch}"
-            )
+            logger.info(f"  Batch {batch_idx + 1}/{total_batches}: pages {page_nums_in_batch}")
 
-            # Call Gemini once for the whole batch
             batch_results = self.structure_pages_batch(batch)
 
             for page in batch:
@@ -400,11 +349,7 @@ class AIProcessor:
                 structured_data = batch_results.get(page_num)
 
                 if structured_data is None:
-                    # Batch call did not return data for this page → fall back to
-                    # individual call so we don't silently lose pages.
-                    logger.warning(
-                        f"    Page {page_num} missing from batch result – retrying individually"
-                    )
+                    logger.warning(f"    Page {page_num} missing from batch result – retrying individually")
                     structured_data = self.structure_text(page.get("raw_text", ""))
                     time.sleep(2)
 
@@ -430,20 +375,15 @@ class AIProcessor:
                 else:
                     failed_count += 1
                     consecutive_failures += 1
-                    logger.error(
-                        f"    ✗ Page {page_num} failed (status={processing_status})"
-                    )
+                    logger.error(f"    ✗ Page {page_num} failed (status={processing_status})")
                     
                     if consecutive_failures >= 3:
                         logger.error("Too many consecutive AI failures. Aborting document processing to prevent timeouts.")
                         raise RuntimeError("KI-Verarbeitung abgebrochen: 3 aufeinanderfolgende Seiten sind fehlgeschlagen (Rate Limit oder API-Fehler).")
 
-            # Pause between batches to respect rate limits (Free Tier: 15 RPM max)
-            # Sleep 5s ensures we do not exceed ~12 requests per minute.
             if batch_idx < total_batches - 1:
                 time.sleep(5)
 
-        # ── Finalise document metadata ─────────────────────────────────────────
         if all_summaries:
             self._update_document_metadata(db_manager, doc_id, all_summaries, all_keywords)
 
@@ -453,7 +393,6 @@ class AIProcessor:
         )
     
     def generate_document_summary(self, page_summaries: List[str], existing_categories: List[str] = None) -> dict:
-        """Generate a concise executive summary and automatically categorize the entire document."""
         if not page_summaries:
             return {"summary": "", "category": "Sonstiges"}
 
@@ -468,9 +407,9 @@ class AIProcessor:
                 system_prompt=system_prompt,
                 user_prompt=f"Here are the summaries of the document pages:\n\n{context}",
                 config={
-                    "response_mime_type": "application/json",
+                    "response_format": {"type": "json_object"},
                     "temperature": 0.3,
-                    "max_output_tokens": 500,
+                    "max_tokens": 500,
                 }
             )
             if raw is None:
@@ -489,7 +428,6 @@ class AIProcessor:
 
     def _update_document_metadata(self, db_manager: MongoDBManager, doc_id: str,
                                    page_summaries: List[str], all_keywords: List[str]):
-        """Update document-level metadata with aggregated summaries, keywords and category."""
         try:
             existing_categories = db_manager.get_unique_categories() if db_manager else []
             doc_info = self.generate_document_summary(page_summaries, existing_categories)
@@ -514,9 +452,9 @@ class AIProcessor:
             logger.error(f"Error updating document metadata: {e}")
 
     def create_embedding(self, text: str) -> List[float]:
-        """Erstellt einen Embedding-Vektor (768 Dimensionen) über Gemini Embedding."""
+        """Erstellt einen Embedding-Vektor über OpenAI."""
         if not self.client:
-            logger.error("create_embedding: Gemini Client nicht initialisiert.")
+            logger.error("create_embedding: OpenAI Client nicht initialisiert.")
             return []
 
         if not text or not text.strip():
@@ -525,20 +463,19 @@ class AIProcessor:
 
         try:
             text_to_embed = text[:32000] if len(text) > 32000 else text
-            response = self.client.models.embed_content(
-                model="gemini-embedding-001",
-                contents=text_to_embed,
+            response = self.client.embeddings.create(
+                input=text_to_embed,
+                model="text-embedding-3-small"
             )
-            return response.embeddings[0].values
+            return response.data[0].embedding
 
         except Exception as e:
             logger.error(f"create_embedding: Fehler: {e}")
             return []
 
     def create_embeddings_batch(self, texts: List[str], batch_size: int = 50) -> List[List[float]]:
-        """Erstellt Embeddings für mehrere Texte mit Throttling-Schutz."""
         if not self.client:
-            logger.error("create_embeddings_batch: Gemini Client nicht initialisiert.")
+            logger.error("create_embeddings_batch: OpenAI Client nicht initialisiert.")
             return []
 
         if not texts:
@@ -557,11 +494,11 @@ class AIProcessor:
             batch = valid_texts[batch_start:batch_start + batch_size]
 
             try:
-                response = self.client.models.embed_content(
-                    model="gemini-embedding-001",
-                    contents=batch,
+                response = self.client.embeddings.create(
+                    input=batch,
+                    model="text-embedding-3-small"
                 )
-                batch_embeddings = [e.values for e in response.embeddings]
+                batch_embeddings = [d.embedding for d in response.data]
                 all_embeddings.extend(batch_embeddings)
                 logger.info(f"  ✓ Batch {batch_idx + 1}/{total_batches} fertig ({len(batch_embeddings)} Vektoren)")
 
@@ -579,9 +516,8 @@ class AIProcessor:
         return all_embeddings
 
     def ask_question(self, question: str, context_chunks: List[str]) -> dict:
-        """Beantwortet eine Frage basierend auf den übergebenen Text-Chunks (RAG)."""
         if not self.client:
-            logger.error("ask_question: Gemini Client nicht initialisiert.")
+            logger.error("ask_question: OpenAI Client nicht initialisiert.")
             return {"answer": "Fehler: KI-Service ist nicht verfügbar.", "follow_ups": []}
             
         if not context_chunks:
@@ -596,9 +532,9 @@ class AIProcessor:
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
                 config={
-                    "response_mime_type": "application/json",
+                    "response_format": {"type": "json_object"},
                     "temperature": 0.2,
-                    "max_output_tokens": 800,
+                    "max_tokens": 800,
                 }
             )
             if raw is None:
@@ -618,7 +554,6 @@ class AIProcessor:
             }
 
     def extract_entities(self, text: str, entity_types: List[str]) -> dict:
-        """Extrahiert benannte Entitäten aus einem Dokumenttext über Gemini."""
         if not self.client:
             return {"error": "KI-Service nicht verfügbar."}
 
@@ -641,9 +576,9 @@ class AIProcessor:
                 system_prompt=system_prompt,
                 user_prompt=f"Dokumenttext:\n\n{text}",
                 config={
-                    "response_mime_type": "application/json",
+                    "response_format": {"type": "json_object"},
                     "temperature": 0.1,
-                    "max_output_tokens": 8000,
+                    "max_tokens": 8000,
                 }
             )
             if raw is None:

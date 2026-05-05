@@ -52,15 +52,15 @@ app.config['MAX_CONTENT_LENGTH'] = _get_int_env('MAX_CONTENT_LENGTH', 50 * 1024 
 app.config['MAX_PAGES_PER_PDF'] = _get_int_env('MAX_PAGES_PER_PDF', 500)  # Hard limit per upload
 app.config['MONGO_URI'] = os.getenv('MONGO_URI', 'mongodb://localhost:27017/')
 app.config['DB_NAME'] = os.getenv('DB_NAME', 'pdf_intelligence_db')
-app.config['GEMINI_API_KEY'] = os.getenv('GEMINI_API_KEY')
-app.config['GEMINI_MODEL'] = os.getenv('GEMINI_MODEL', 'gemini-2.5-flash')
+app.config['OPENAI_API_KEY'] = os.getenv('OPENAI_API_KEY')
+app.config['OPENAI_MODEL'] = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
 
 # Patch 1: Validate Critical Configuration
-api_key = app.config['GEMINI_API_KEY']
+api_key = app.config['OPENAI_API_KEY']
 if not api_key:
-    logger.error("CRITICAL: GEMINI_API_KEY is missing. AI features will not work.")
+    logger.error("CRITICAL: OPENAI_API_KEY is missing. AI features will not work.")
 
-logger.info(f"AI Config: Model={app.config.get('GEMINI_MODEL', 'unknown')} | Key=...{str(api_key)[-4:] if api_key else 'None'}")
+logger.info(f"AI Config: Model={app.config.get('OPENAI_MODEL', 'unknown')} | Key=...{str(api_key)[-4:] if api_key else 'None'}")
 
 # Ensure upload directory exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -68,7 +68,7 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 # Initialize components
 db = MongoDBManager(uri=app.config['MONGO_URI'], db_name=app.config['DB_NAME'])
 pdf_processor = PDFProcessor()
-ai_processor = AIProcessor(api_key=app.config['GEMINI_API_KEY'], model=app.config['GEMINI_MODEL'])
+ai_processor = AIProcessor(api_key=app.config['OPENAI_API_KEY'], model=app.config['OPENAI_MODEL'])
 text_chunker = TextChunker()  # Einmalig initialisiert, nicht bei jedem Request
 qdrant_manager = QdrantManager()  # Verbindet zu localhost:6333 (Docker)
 if not qdrant_manager.is_connected():
