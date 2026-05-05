@@ -1,5 +1,5 @@
 from pymongo import MongoClient
-from pymongo.errors import ConnectionFailure, OperationFailure
+from pymongo.errors import ConnectionFailure, OperationFailure, ConfigurationError
 from datetime import datetime
 import uuid
 import logging
@@ -102,7 +102,7 @@ class MongoDBManager:
             logger.info(f"Connected to MongoDB: {self.db_name}")
             logger.info("Collections initialized: documents, pages, GridFS")
             
-        except ConnectionFailure as e:
+        except (ConnectionFailure, ConfigurationError) as e:
             logger.error(
                 f"CRITICAL: Could not connect to MongoDB at '{self.uri}'. "
                 f"Check MONGO_URI environment variable (e.g. missing cluster ID in Atlas URL). "
