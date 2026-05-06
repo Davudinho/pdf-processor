@@ -832,6 +832,10 @@ function renderAgentTasks(tasks) {
                 <div class="agent-result-content" style="display:none; padding:1.5rem; background:rgba(255, 255, 255, 0.7); border-radius:var(--radius-lg); border:1px solid var(--border); margin-top:1rem; box-shadow: var(--shadow-sm);">
                     ${keyFindingsHtml}
                     ${reportHtml}
+                    <div style="display:flex; gap:0.5rem; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                        <button class="btn btn-sm btn-outline" onclick="copyAgentReport(this, \`${encodeURIComponent(task.report || '')}\`)">📋 Text kopieren</button>
+                        <button class="btn btn-sm btn-outline" onclick="downloadAgentReport(\`Agent_Report_${task.task_id.substring(0,8)}.md\`, \`${encodeURIComponent(task.report || '')}\`)">⬇️ Als Markdown speichern</button>
+                    </div>
                 </div>
             `;
             toggleHtml = `
@@ -958,4 +962,25 @@ async function deleteAgentTask(taskId) {
         console.error(e);
         alert("Fehler beim Löschen der Aufgabe.");
     }
+}
+
+// COPY / DOWNLOAD AGENT REPORT
+function copyAgentReport(btn, encodedText) {
+    const text = decodeURIComponent(encodedText);
+    navigator.clipboard.writeText(text).then(() => {
+        const oldHtml = btn.innerHTML;
+        btn.innerHTML = '✅ Kopiert!';
+        setTimeout(() => btn.innerHTML = oldHtml, 2000);
+    });
+}
+
+function downloadAgentReport(filename, encodedText) {
+    const text = decodeURIComponent(encodedText);
+    const blob = new Blob([text], { type: 'text/markdown;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
 }

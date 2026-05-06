@@ -298,6 +298,30 @@ class PdfAgent:
                 key_findings=final_result["key_findings"],
             )
             logger.info(f"[Agent] Task {task_id} abgeschlossen.")
+
+            # Webhook für n8n/Zapier auslösen
+            webhook_url = os.environ.get("WEBHOOK_URL")
+            if webhook_url:
+                try:
+                    import urllib.request
+                    import json
+                    payload = json.dumps({
+                        "task_id": task_id,
+                        "task_text": task_text,
+                        "status": "done",
+                        "report": final_result["report"],
+                        "key_findings": final_result["key_findings"]
+                    }).encode('utf-8')
+                    req = urllib.request.Request(
+                        webhook_url, 
+                        data=payload, 
+                        headers={'Content-Type': 'application/json', 'User-Agent': 'PDF-Intelligence-Agent'}
+                    )
+                    urllib.request.urlopen(req, timeout=5)
+                    logger.info(f"[Agent] Webhook erfolgreich an {webhook_url} gesendet.")
+                except Exception as e:
+                    logger.error(f"[Agent] Webhook Fehler: {e}")
+
             return final_result
 
         except Exception as e:

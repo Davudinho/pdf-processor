@@ -161,6 +161,12 @@
                     required style="flex: 1; padding: 1rem; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--card-bg); color: var(--text-main);">
                 <button type="submit" class="btn btn-primary" id="agent-btn">Aufgabe starten</button>
             </form>
+            
+            <div class="prompt-suggestions" style="margin-top: 0.8rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <span class="badge" style="cursor: pointer; background: var(--bg-secondary); border: 1px solid var(--border-color); transition: all 0.2s;" onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='var(--border-color)'" onclick="document.getElementById('agent-input').value='Fasse alle hochgeladenen Dokumente zusammen.'">🔍 Zusammenfassen</span>
+                <span class="badge" style="cursor: pointer; background: var(--bg-secondary); border: 1px solid var(--border-color); transition: all 0.2s;" onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='var(--border-color)'" onclick="document.getElementById('agent-input').value='Finde alle vorkommenden Personen und Orte.'">👥 Entitäten suchen</span>
+                <span class="badge" style="cursor: pointer; background: var(--bg-secondary); border: 1px solid var(--border-color); transition: all 0.2s;" onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='var(--border-color)'" onclick="document.getElementById('agent-input').value='Suche nach rechtlichen Risiken oder Klauseln.'">⚖️ Risiken analysieren</span>
+            </div>
 
             <div id="agent-tasks-container" style="margin-top: 2rem;">
                 <h3 style="font-size: 1rem; color: var(--text-main); margin-bottom: 1rem;">Meine Aufgaben</h3>
