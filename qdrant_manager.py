@@ -73,15 +73,16 @@ class QdrantManager:
         try:
             if self.api_key:
                 # Qdrant Cloud: URL-basierte Verbindung mit API-Key und HTTPS
-                if self.host.startswith("http"):
-                    url = self.host
+                clean_host = self.host.replace("https://", "").replace("http://", "")
+                if ":" in clean_host:
+                    clean_host = clean_host.split(":")[0]  # Port abschneiden
+
+                if ".cloud.qdrant.io" in clean_host:
+                    url = f"https://{clean_host}"
                 else:
                     scheme = "https" if self.https else "http"
-                    # Qdrant Cloud nutzt standardmäßig Port 443 für REST, Port 6333 führt oft zu 404
-                    if ".cloud.qdrant.io" in self.host:
-                        url = f"https://{self.host}"
-                    else:
-                        url = f"{scheme}://{self.host}:{self.port}"
+                    url = f"{scheme}://{clean_host}:{self.port}"
+                    
                 self.client = QdrantClient(url=url, api_key=self.api_key, timeout=10)
                 logger.info(f"Qdrant Cloud verbunden: {url}")
             else:
