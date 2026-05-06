@@ -809,9 +809,11 @@ function renderAgentTasks(tasks) {
             }
             
             resultHtml = `<div style="margin-top: 1rem;">${stepsHtml}</div>`;
+            toggleHtml = `<button class="btn btn-sm" style="color:var(--danger); border:1px solid var(--danger); background:transparent; margin-left:auto;" onclick="deleteAgentTask('${task.task_id}')">Löschen</button>`;
         } else if (task.status === 'failed') {
             statusBadge = '<span style="color:var(--danger); font-size:0.85rem;">❌ Fehlgeschlagen</span>';
             resultHtml = `<div style="color:var(--danger); font-size:0.85rem; padding:0.5rem; background:#fee2e2; border-radius:4px; margin-top: 1rem;">${escapeHtml(task.error_message || "Unbekannter Fehler")}</div>`;
+            toggleHtml = `<button class="btn btn-sm" style="color:var(--danger); border:1px solid var(--danger); background:transparent; margin-left:auto;" onclick="deleteAgentTask('${task.task_id}')">Löschen</button>`;
         } else if (task.status === 'done') {
             statusBadge = '<span style="color:var(--success); font-size:0.85rem;">✅ Abgeschlossen</span>';
             let keyFindingsHtml = '';
@@ -832,7 +834,12 @@ function renderAgentTasks(tasks) {
                     ${reportHtml}
                 </div>
             `;
-            toggleHtml = `<button class="btn btn-sm btn-outline" style="margin-left:auto;" onclick="toggleAgentResult(event, this)">Ergebnis ansehen</button>`;
+            toggleHtml = `
+                <div style="display:flex; gap:0.5rem; margin-left:auto;">
+                    <button class="btn btn-sm btn-outline" onclick="toggleAgentResult(event, this)">Ergebnis ansehen</button>
+                    <button class="btn btn-sm" style="color:var(--danger); border:1px solid var(--danger); background:transparent;" onclick="deleteAgentTask('${task.task_id}')">Löschen</button>
+                </div>
+            `;
         }
 
         return `
@@ -935,4 +942,20 @@ function downloadCSV(type) {
     a.download = `${type}_extract.csv`;
     a.click();
     URL.revokeObjectURL(url);
+}
+
+// DELETE AGENT TASK
+async function deleteAgentTask(taskId) {
+    if (!confirm("Möchtest du diese Aufgabe wirklich löschen?")) return;
+    try {
+        const res = await fetch(`/agent/task/${taskId}`, { method: 'DELETE' });
+        if (res.ok) {
+            pollAgentTasks(); // refresh liste
+        } else {
+            alert("Fehler beim Löschen der Aufgabe.");
+        }
+    } catch (e) {
+        console.error(e);
+        alert("Fehler beim Löschen der Aufgabe.");
+    }
 }

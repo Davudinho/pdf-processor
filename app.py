@@ -587,6 +587,14 @@ def get_agent_task_status(task_id):
         return jsonify({"success": False, "error": "Task nicht gefunden."}), 404
     return jsonify({"success": True, "task": task})
 
+@app.route('/agent/task/<task_id>', methods=['DELETE'])
+def delete_agent_task(task_id):
+    """Löscht einen Agenten-Task."""
+    success = db.delete_agent_task(task_id)
+    if success:
+        return jsonify({"success": True, "message": "Task gelöscht"}), 200
+    return jsonify({"success": False, "error": "Task konnte nicht gelöscht werden"}), 404
+
 @app.route('/agent/tasks', methods=['GET'])
 def list_agent_tasks():
     """Gibt die letzten Agent-Tasks zurück."""

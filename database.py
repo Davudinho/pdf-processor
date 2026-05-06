@@ -798,3 +798,13 @@ class MongoDBManager:
             logger.error(f"get_all_agent_tasks: {e}")
             return []
 
+    def delete_agent_task(self, task_id: str) -> bool:
+        """Löscht einen Agenten-Task aus der Datenbank."""
+        if self.agent_tasks_collection is None:
+            return False
+        try:
+            result = self.agent_tasks_collection.delete_one({"task_id": task_id})
+            return result.deleted_count > 0
+        except Exception as e:
+            logger.error(f"delete_agent_task: {e}")
+            return False
