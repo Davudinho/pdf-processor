@@ -78,7 +78,8 @@ class QdrantManager:
                     clean_host = clean_host.split(":")[0]  # Port abschneiden
 
                 if ".cloud.qdrant.io" in clean_host:
-                    url = f"https://{clean_host}"
+                    # QdrantClient appends :6333 by default if no port is in URL. Force 443 for REST!
+                    url = f"https://{clean_host}:443"
                 else:
                     scheme = "https" if self.https else "http"
                     url = f"{scheme}://{clean_host}:{self.port}"
