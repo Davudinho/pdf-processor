@@ -4,9 +4,13 @@ from qdrant_manager import QdrantManager
 
 class TestQdrantManager(unittest.TestCase):
     def setUp(self):
-        self.qdrant = QdrantManager(host="localhost", port=6333)
+        from dotenv import load_dotenv
+        load_dotenv()
+        # Falls .env-Werte gesetzt sind, nutzen wir diese (z. B. Qdrant Cloud),
+        # ansonsten fällt QdrantManager automatisch auf localhost:6333 zurück.
+        self.qdrant = QdrantManager()
         if not self.qdrant.is_connected():
-            self.skipTest("Qdrant ist nicht erreichbar. Läuft der Docker-Container?")
+            self.skipTest("Qdrant ist nicht erreichbar. Prüfe die Konfiguration in deiner .env (oder ob Docker lokal läuft).")
         
         # Stelle sicher dass wir einen sauberen Zustand für unseren Test-Doc haben
         self.test_doc_id = str(uuid.uuid4())
@@ -34,7 +38,7 @@ class TestQdrantManager(unittest.TestCase):
         query_emb = [0.1] * 1536
         query_emb[0] = 0.95 
         
-        results = self.qdrant.search_similar(query_emb, limit=2, doc_id=self.test_doc_id)
+        results = self.qdrant.search_similar(query_emb, limit=2, doc_ids=self.test_doc_id)
         
         self.assertGreater(len(results), 0, "Suche sollte Ergebnisse liefern")
         self.assertEqual(results[0]["page_num"], 1, "Das erste Ergebnis sollte der Finanzen-Satz (Seite 1) sein")
@@ -45,7 +49,7 @@ class TestQdrantManager(unittest.TestCase):
         self.assertTrue(delete_success, "Dokument sollte erfolgreich gelöscht werden")
         
         # Erneute Suche sollte keine Ergebnisse mehr liefern für diesen doc_id
-        empty_results = self.qdrant.search_similar(query_emb, limit=2, doc_id=self.test_doc_id)
+        empty_results = self.qdrant.search_similar(query_emb, limit=2, doc_ids=self.test_doc_id)
         self.assertEqual(len(empty_results), 0, "Nach Löschung sollten keine Chunks mehr gefunden werden")
 
     def tearDown(self):

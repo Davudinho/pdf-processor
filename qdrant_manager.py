@@ -123,6 +123,12 @@ class QdrantManager:
                         distance=Distance.COSINE  # Cosine Similarity für Textähnlichkeit
                     )
                 )
+                # Payload-Index für 'doc_id' erstellen, was für Qdrant Cloud beim Filtern erforderlich ist
+                self.client.create_payload_index(
+                    collection_name=COLLECTION_NAME,
+                    field_name="doc_id",
+                    field_schema="keyword",
+                )
                 logger.info(f"Qdrant Collection '{COLLECTION_NAME}' erstellt (Vectorgröße: {VECTOR_SIZE})")
             else:
                 logger.info(f"Qdrant Collection '{COLLECTION_NAME}' bereits vorhanden")

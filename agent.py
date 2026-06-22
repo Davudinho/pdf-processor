@@ -13,6 +13,7 @@ Ablauf:
 6. Ergebnis wird in DB gespeichert
 """
 
+import os
 import json
 import logging
 import time
@@ -304,7 +305,6 @@ class PdfAgent:
             if webhook_url:
                 try:
                     import urllib.request
-                    import json
                     payload = json.dumps({
                         "task_id": task_id,
                         "task_text": task_text,
@@ -544,7 +544,6 @@ class PdfAgent:
 
     def _summarize_output(self, output: dict, max_chars: int = 400) -> str:
         """Kürzt Tool-Output für die Anzeige in der UI."""
-        import json
         try:
             text = json.dumps(output, ensure_ascii=False)
             if len(text) > max_chars:
