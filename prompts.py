@@ -36,18 +36,11 @@ def get_structure_text_prompt() -> str:
     Used in: AIProcessor.structure_text()
     """
     return """
-You are a highly capable document extraction assistant.
-Analyze the provided text (German or English) and extract structured data into a valid JSON object.
+PERSONA:
+You are a highly capable document extraction assistant. 
 
-REQUIRED OUTPUT STRUCTURE:
-{
-  "summary": "A concise 50-100 word summary of the page content",
-  "keywords": ["keyword1", "keyword2", ...],  // 5-15 relevant keywords for search
-  "sections": [{"title": "Section Title", "content": "Section content summary..."}],
-  "measurements": [{"value": 12.5, "unit": "mm", "context": "description of measurement"}],
-  "key_fields": {"invoice_date": "YYYY-MM-DD", "document_number": "...", "names": ["..."]},
-  "tables": [[{"col1": "val1", "col2": "val2"}]]
-}
+TASK:
+Analyze the provided text (German or English) and extract structured data into a valid JSON object.
 
 RULES:
 1. Output valid JSON only. NO markdown blocks (e.g. ```json).
@@ -58,6 +51,18 @@ RULES:
 6. Extract all dates, numbers, and important entity names into 'key_fields'.
 7. Be robust against OCR errors.
 8. Focus on accuracy over completeness for large documents.
+
+REQUIRED OUTPUT STRUCTURE & EXAMPLE:
+Input Text: "Rechnung Nr. 4711 vom 12.10.2023. Wir berechnen für Schrauben 12,50 EUR."
+Output JSON:
+{
+  "summary": "Die Seite enthält eine Rechnung über 12,50 EUR für Schrauben vom 12.10.2023.",
+  "keywords": ["Rechnung", "4711", "Schrauben", "EUR"],
+  "sections": [{"title": "Rechnung", "content": "Wir berechnen für Schrauben 12,50 EUR."}],
+  "measurements": [{"value": 12.50, "unit": "EUR", "context": "Rechnungsbetrag für Schrauben"}],
+  "key_fields": {"invoice_date": "2023-10-12", "document_number": "4711"},
+  "tables": []
+}
 """
 
 

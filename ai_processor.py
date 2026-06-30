@@ -80,9 +80,21 @@ class AIProcessor:
                     model=self.model,
                     messages=messages,
                     temperature=config.get("temperature", 0.0),
-                    max_tokens=config.get("max_tokens", 1000),
+                    max_completion_tokens=config.get("max_completion_tokens", 4000),
                     response_format=config.get("response_format", None)
                 )
+                
+                # Token Tracking und Kostenkalkulation
+                if response.usage:
+                    p_tokens = response.usage.prompt_tokens
+                    c_tokens = response.usage.completion_tokens
+                    # gpt-4o-mini Preise (ca. $0.15 per 1M input, $0.60 per 1M output)
+                    if "mini" in self.model:
+                        cost = (p_tokens / 1000000) * 0.15 + (c_tokens / 1000000) * 0.60
+                        logger.info(f"Token Usage: Prompt={p_tokens}, Completion={c_tokens} | Estimated Cost: ${cost:.6f}")
+                    else:
+                        logger.info(f"Token Usage: Prompt={p_tokens}, Completion={c_tokens}")
+
                 return response.choices[0].message.content
             except Exception as e:
                 error_msg = str(e)
@@ -171,7 +183,7 @@ class AIProcessor:
                 config={
                     "response_format": {"type": "json_object"},
                     "temperature": 0.0,
-                    "max_tokens": 1000,
+                    "max_completion_tokens": 4000,
                 }
             )
 
@@ -244,7 +256,7 @@ class AIProcessor:
                 config={
                     "response_format": {"type": "json_object"},
                     "temperature": 0.0,
-                    "max_tokens": 4000,
+                    "max_completion_tokens": 16000,
                 }
             )
 
@@ -409,7 +421,7 @@ class AIProcessor:
                 config={
                     "response_format": {"type": "json_object"},
                     "temperature": 0.3,
-                    "max_tokens": 500,
+                    "max_completion_tokens": 1500,
                 }
             )
             if raw is None:
@@ -534,7 +546,7 @@ class AIProcessor:
                 config={
                     "response_format": {"type": "json_object"},
                     "temperature": 0.2,
-                    "max_tokens": 800,
+                    "max_completion_tokens": 2000,
                 }
             )
             if raw is None:
@@ -578,7 +590,7 @@ class AIProcessor:
                 config={
                     "response_format": {"type": "json_object"},
                     "temperature": 0.1,
-                    "max_tokens": 8000,
+                    "max_completion_tokens": 8000,
                 }
             )
             if raw is None:

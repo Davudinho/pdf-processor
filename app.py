@@ -399,13 +399,21 @@ def ask_question():
         "question": "Was ist der Gesamtbetrag der Rechnung?"
     }
     """
+    if not request.is_json:
+        return jsonify({"success": False, "error": "Request muss als 'application/json' gesendet werden"}), 415
+
     data = request.json
-    if not data or 'question' not in data:
-        return jsonify({"success": False, "error": "Missing 'question' in request body"}), 400
+    if not data or not isinstance(data, dict):
+        return jsonify({"success": False, "error": "Ungültiges Format: Erwarte JSON-Objekt"}), 400
+
+    if 'question' not in data:
+        return jsonify({"success": False, "error": "Das Pflichtfeld 'question' fehlt"}), 400
         
-    question = data['question'].strip()
-    if not question:
-        return jsonify({"success": False, "error": "Empty question"}), 400
+    question = data.get('question', '')
+    if not isinstance(question, str) or not question.strip():
+        return jsonify({"success": False, "error": "Das Feld 'question' muss ein nicht-leerer String sein"}), 400
+        
+    question = question.strip()
         
     # Cross-Document: Akzeptiere doc_ids (Liste) oder doc_id (String) für Rückwärtskompatibilität
     doc_ids = data.get('doc_ids')  # Neue Variante: Liste von IDs
@@ -480,15 +488,29 @@ def extract_entities():
         "entity_types": ["personen", "firmen", "betraege", "daten", "adressen"]
     }
     """
-    data = request.json
-    if not data or 'doc_id' not in data:
-        return jsonify({"success": False, "error": "Missing 'doc_id' in request body"}), 400
+    if not request.is_json:
+        return jsonify({"success": False, "error": "Request muss als 'application/json' gesendet werden"}), 415
 
-    doc_id = data['doc_id']
+    data = request.json
+    if not data or not isinstance(data, dict):
+        return jsonify({"success": False, "error": "Ungültiges Format: Erwarte JSON-Objekt"}), 400
+
+    if 'doc_id' not in data:
+        return jsonify({"success": False, "error": "Das Pflichtfeld 'doc_id' fehlt"}), 400
+
+    doc_id = data.get('doc_id')
+    if not isinstance(doc_id, str) or not doc_id.strip():
+        return jsonify({"success": False, "error": "Das Feld 'doc_id' muss ein nicht-leerer String sein"}), 400
+    doc_id = doc_id.strip()
+
     entity_types = data.get('entity_types', [])
-    
-    if not entity_types:
-        return jsonify({"success": False, "error": "Keine Entity-Typen ausgewählt."}), 400
+    if not isinstance(entity_types, list) or not entity_types:
+        return jsonify({"success": False, "error": "Das Feld 'entity_types' muss eine nicht-leere Liste von Strings sein"}), 400
+
+    valid_types = {"personen", "firmen", "daten", "betraege", "adressen"}
+    invalid_types = [t for t in entity_types if not isinstance(t, str) or t not in valid_types]
+    if invalid_types:
+        return jsonify({"success": False, "error": f"Ungültige entity_types angefragt: {invalid_types}. Erlaubt sind: {list(valid_types)}"}), 400
 
     try:
         # Caching-Logik: Prüfen, was schon vorhanden ist
